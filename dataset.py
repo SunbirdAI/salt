@@ -1,7 +1,7 @@
 import datasets
 from datasets import Dataset, Audio, Value
 import itertools
-from functools import partial
+from preprocessing import text_preprocessing
 
 def _ensure_list(x):
     return x if isinstance(x, list) else [x]
@@ -85,19 +85,22 @@ def _matching_items(row, source_target_config):
     for language in _ensure_list(source_target_config['language']):
         if source_target_config['type'] == 'text':
             if row.get(f'text_{language}'):
-                matches.append([row[f'text_{language}'], language])
+                matches.append(
+                    {'value': row[f'text_{language}'], 'language': language})
         elif source_target_config['type'] == 'speech':
             if row.get('audio_language') == language:
                 if speaker_id_filter and row['speaker_id'] != speaker_id_filter:
                     continue
-                matches.append([row['audio'], language])
+                matches.append(
+                    {'value': row['audio'], 'language': language})
             if f'audio_{language}' in row:
                 for audio_example, speaker_id in zip(
                     row[f'audio_{language}'],
                     row[f'audio_{language}_speaker_id']):
                     if speaker_id_filter and speaker_id != speaker_id_filter:
                         continue
-                    matches.append([audio_example, language])
+                    matches.append(
+                        {'value': audio_example, 'language': language})
         else:
             raise ValueError(
                 'Unknown source/target type. Should be one of '
@@ -105,22 +108,34 @@ def _matching_items(row, source_target_config):
             )
     return matches
 
-def _matching_pairs(row, dataset_config):
+def _matching_pairs(row,
+                    config,
+                    source_preprocess_fn,
+                    target_preprocess_fn):
     """Find all source/target pairs that match the configuration."""
-    source_items = _matching_items(row, dataset_config['source'])
-    target_items = _matching_items(row, dataset_config['target'])
+    source_items = _matching_items(row, config['source'])
+    target_items = _matching_items(row, config['target'])
+    
     for source in source_items:
+        source = source_preprocess_fn(source)
         for target in target_items:
+            target = target_preprocess_fn(target)
             yield {
-                'source': source[0], 'source_language': source[1],
-                'target': target[0], 'target_language': target[1]
+                'source': source['value'],
+                'source_language': source['language'],
+                'target': target['value'],
+                'target_language': target['language'],
             }
 
 def _create_generator(config):
+    source_preprocess_fn = lambda x: x
+    target_preprocess_fn = lambda x: x
     huggingface_datasets = _load_huggingface_datasets(config)
     for ds in huggingface_datasets:
         for row in ds:
-            for match in _matching_pairs(row, config):
+            for match in _matching_pairs(row, config,
+                                         source_preprocess_fn,
+                                         target_preprocess_fn):
                 yield {k: match[k] for k in ['source', 'target']}
 
 def create(config):
