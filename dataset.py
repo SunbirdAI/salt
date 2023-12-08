@@ -1,7 +1,5 @@
 import datasets
-from datasets import Dataset, Audio, Value
 import itertools
-from preprocessing import text_preprocessing
 
 def _ensure_list(x):
     return x if isinstance(x, list) else [x]
@@ -167,19 +165,23 @@ def create(config):
     """
     # TODO: checks on configuration to make sure it's valid.
     # TODO: make sample rate configurable.
-    
+   
+    # Multiple source or target languages can be specified in the yaml config
+    # e.g. with "language: [lug, ach]". An easy mistake is to write
+    # "language: lug, ach" instead , which gets converted to a string and not
+    # a list, so check for that and alert the user.
     for language in [config[s]['language'] for s in ['source', 'target']]:
         if ',' in language and isinstance(language, str):
             raise ValueError(
                 'A list of languages has been specified in config as a string: '
                 f'{language}. Change to [{language}] to make it a list.')
     
-    audio_feature = Audio(sampling_rate=16_000)
+    audio_feature = datasets.Audio(sampling_rate=16_000)
     
     features = datasets.Features({
-        'source': (Value('string') if config['source']['type'] == 'text'
+        'source': (datasets.Value('string') if config['source']['type'] == 'text'
                    else audio_feature),
-        'target': (Value('string') if config['target']['type'] == 'text'
+        'target': (datasets.Value('string') if config['target']['type'] == 'text'
                    else audio_feature),
 
     })
