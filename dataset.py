@@ -1,5 +1,4 @@
 import datasets
-from datasets import Dataset, Audio, Value, Features
 import itertools
 import text_preprocessing
 import functools
@@ -239,7 +238,11 @@ def create(config):
     """
     # TODO: checks on configuration to make sure it's valid.
     # TODO: make sample rate configurable.
-    
+   
+    # Multiple source or target languages can be specified in the yaml config
+    # e.g. with "language: [lug, ach]". An easy mistake is to write
+    # "language: lug, ach" instead , which gets converted to a string and not
+    # a list, so check for that and alert the user.
     for language in [config[s]['language'] for s in ['source', 'target']]:
         if ',' in language and isinstance(language, str):
             raise ValueError(
@@ -247,16 +250,17 @@ def create(config):
                 f'{language}. Change to [{language}] to make it a list.')
         
     text_features = datasets.Features({
-        'text': Value('string'),
-        'language': Value('string'),
-        'origin_dataset': Value('string'),
+        'text': datasets.Value('string'),
+        'language': datasets.Value('string'),
+        'origin_dataset': datasets.Value('string'),
+
     })
     
     audio_features = datasets.Features({
-        'audio': Audio(sampling_rate=16_000),
-        'language': Value('string'),
-        'speaker_id': Value('string'),
-        'is_studio': Value('bool'),
+        'audio': datasets.Audio(sampling_rate=16_000),
+        'language': datasets.Value('string'),
+        'speaker_id': datasets.Value('string'),
+        'is_studio': datasets.Value('bool'),
     })
     
     features = {}
