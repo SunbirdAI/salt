@@ -10,7 +10,7 @@ normalizer = sacremoses.MosesPunctNormalizer()
 
 def prefix_target_language(r, src_or_tgt):
     for i in range(len(r['source'])):
-        r[src_or_tgt][i] = f'>>{r["target_language"][i]}<< ' + r[src_or_tgt][i]
+        r[src_or_tgt][i] = f'>>{r["target.language"][i]}<< ' + r[src_or_tgt][i]
     return r
 
 def sentence_format(r, src_or_tgt, add_full_stop=True):

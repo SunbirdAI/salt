@@ -1,7 +1,24 @@
 import datasets
 import itertools
 import text_preprocessing
+import audio_preprocessing
 import functools
+
+PREPROCESS_LIST_HELP_STRING = '''
+Preprocessing operations should be specified as a list in yaml, for example:
+
+preprocessing:
+    - first_operation:
+        params
+    - second_operation
+
+and not like this (without dashes):
+
+preprocessing:
+    first_operation:
+        params
+    second_operation 
+'''
 
 def _ensure_list(x):
     return x if isinstance(x, list) else [x]
@@ -128,18 +145,18 @@ def _matching_pairs(row, config):
     
     for source in source_items:
         for target in target_items:
-            example = {
-                'source': source.get('text') or source.get('audio'),
-                'target': target.get('text') or target.get('audio'),
-            }
-            
+            example = {}
             for k, v in source.items():
                 if k not in ['text', 'audio']:
-                    example['source_' + k] = v
+                    example['source.' + k] = v
+                else:
+                    example['source'] = v
                     
             for k, v in target.items():
                 if k not in ['text', 'audio']:
-                    example['target_' + k] = v
+                    example['target.' + k] = v
+                else:
+                    example['target'] = v
 
             yield example
 
@@ -161,11 +178,20 @@ def _compose(functions):
 def _build_source_or_target_preprocess_function(config, source_or_target):
     '''Compose the specified preprocessing ops into one function object.'''
     preprocess_spec = config[source_or_target].get('preprocessing')
-    
+
     # If nothing is specified, just return the identify function.
     if not preprocess_spec:
         return lambda x: x
-
+    
+    if isinstance(preprocess_spec, dict):
+        # Easy mistake to make: specifying preprocessing ops as a dict (which
+        # is not appropriate as it has no ordering). Alert the user.
+        print(PREPROCESS_LIST_HELP_STRING)
+        raise ValueError(
+            'Error found in preprocessing specification: ',
+            preprocess_spec
+        )
+        
     functions = []
     for f in preprocess_spec:
         # The YAML for each preprocessing operation looks like either 
@@ -175,14 +201,25 @@ def _build_source_or_target_preprocess_function(config, source_or_target):
             kwargs = {}
         else:
             function_name = list(f.keys())[0]
-            kwargs = f[function_name]
+            kwargs = f[function_name] or {}
                 
         # Find the corresponding function definition    
         if config[source_or_target]['type'] == 'text':
-            function = getattr(text_preprocessing, function_name)
+            preprocessing_module = text_preprocessing
         else:
-            raise NotImplementedError() # TODO audio
-                    
+            preprocessing_module = audio_preprocessing
+            
+        available_function_names = [
+            name for name in dir(preprocessing_module)
+            if callable(getattr(preprocessing_module, name))]
+        
+        if function_name not in available_function_names:
+            raise NameError(
+                f'Preprocessing function \'{function_name}\' couldn\'t be '
+                f'loaded. Available {config[source_or_target]["type"]} '
+                f'preprocessing functions are: {available_function_names}.')
+            
+        function = getattr(preprocessing_module, function_name)            
         functions.append(
             functools.partial(function, src_or_tgt=source_or_target, **kwargs))
                 
@@ -270,13 +307,13 @@ def create(config):
                 if k == 'text':
                     features[source_or_target] = v
                 else:
-                    features[f'{source_or_target}_{k}'] = v
+                    features[f'{source_or_target}.{k}'] = v
         else:
             for k, v in audio_features.items():
                 if k == 'audio':
                     features[source_or_target] = v
                 else:
-                    features[f'{source_or_target}_{k}'] = v
+                    features[f'{source_or_target}.{k}'] = v
     
     generator_function = lambda: _create_generator(config)
     ds = datasets.Dataset.from_generator(

@@ -3,11 +3,12 @@ import dataset
 import soundfile
 import pandas as pd
 import datasets
-from datasets import Dataset, Audio
 import tempfile
 import os
 import numpy as np
 import yaml
+import random
+import string
 
 class DatasetTestCase(unittest.TestCase):
     def assertNestedAlmostEqual(self, expected, actual, places=3):
@@ -123,28 +124,96 @@ class DatasetTestCase(unittest.TestCase):
         pd.DataFrame(translate_data_missing_value).to_csv(
           temp_csv_path, index=False)
 
-        audio_dataset = Dataset.from_dict(audio_metadata).cast_column(
-          'audio', Audio(sampling_rate=16000))
+        audio_dataset = datasets.Dataset.from_dict(audio_metadata).cast_column(
+          'audio', datasets.Audio(sampling_rate=16000))
         audio_dataset.to_parquet(f'{self.data_path}/audio_mock.parquet')
         
     def tearDown(self):
-      self.temp_dir.cleanup()
+        self.temp_dir.cleanup()
       
 
-    def test_preprocessing_pipeline(self):
-        def prefix_tag(r, src_or_tgt, tag="hello"):
-            for i in range(len(r['source'])):
-                r[src_or_tgt][i] = f'>{tag}< ' + r[src_or_tgt][i]
-            return r
-        
+    def test_preprocessing_augmentation(self):
         def random_prefix(r, src_or_tgt):
             for i in range(len(r['source'])):
                 prefix = ''.join(
-                    random.choice(string.ascii_letters) for _ in range(3))
+                    random.choice(string.ascii_letters) for _ in range(6))
                 r[src_or_tgt][i] = f'>{prefix}< ' + r[src_or_tgt][i]
             return r
-        pass
-    
+        
+        setattr(dataset.text_preprocessing, 'random_prefix', random_prefix)
+        
+        yaml_config = '''
+        huggingface_load:
+            path: csv
+            data_files: PATH/translation_dataset_1.csv
+            split: train
+        source:
+            type: text
+            language: lug
+            preprocessing:
+                - random_prefix
+        target:
+            type: text
+            language: eng
+        '''.replace('PATH', self.data_path)
+
+        config = yaml.safe_load(yaml_config)
+        ds = dataset.create(config)
+        
+        sample_1 = list(ds)
+        sample_2 = list(ds)
+        
+        # Check we get a different random example each time the dataset is read
+        self.assertNotEqual(sample_1[0]['source'], sample_2[0]['source'])
+        self.assertEqual(sample_1[0]['target'], sample_2[0]['target'])
+        
+    def test_preprocessing_pipeline(self):
+        def prefix(r, src_or_tgt, tag):
+            for i in range(len(r['source'])):
+                r[src_or_tgt][i] = tag + ' ' + r[src_or_tgt][i]
+            return r
+
+        def suffix(r, src_or_tgt, tag):
+            for i in range(len(r['source'])):
+                r[src_or_tgt][i] = r[src_or_tgt][i] + ' ' + tag
+            return r
+        
+        setattr(dataset.text_preprocessing, 'prefix', prefix)
+        setattr(dataset.text_preprocessing, 'suffix', suffix)
+        
+        yaml_config = '''
+        huggingface_load:
+            path: csv
+            data_files: PATH/translation_dataset_1.csv
+            split: train
+        source:
+            type: text
+            language: lug
+            preprocessing:
+                - prefix:
+                    tag: one
+                - prefix:
+                    tag: two
+                - suffix:
+                    tag: three
+        target:
+            type: text
+            language: eng
+            preprocessing:
+                - suffix:
+                    tag: four
+        '''.replace('PATH', self.data_path)
+
+        config = yaml.safe_load(yaml_config)
+        ds = dataset.create(config)
+        
+        expected = [
+            {'source': 'two one lug1 three', 'target': 'eng1 four'},
+            {'source': 'two one lug2 three', 'target': 'eng2 four'},
+            {'source': 'two one lug3 three', 'target': 'eng3 four'}]
+
+        self.assertEquals(list(ds), expected)
+   
     def test_text_to_speech_dataset(self):      
       yaml_config = '''
       huggingface_load:
