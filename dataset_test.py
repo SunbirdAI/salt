@@ -131,6 +131,20 @@ class DatasetTestCase(unittest.TestCase):
       self.temp_dir.cleanup()
       
 
+    def test_preprocessing_pipeline(self):
+        def prefix_tag(r, src_or_tgt, tag="hello"):
+            for i in range(len(r['source'])):
+                r[src_or_tgt][i] = f'>{tag}< ' + r[src_or_tgt][i]
+            return r
+        
+        def random_prefix(r, src_or_tgt):
+            for i in range(len(r['source'])):
+                prefix = ''.join(
+                    random.choice(string.ascii_letters) for _ in range(3))
+                r[src_or_tgt][i] = f'>{prefix}< ' + r[src_or_tgt][i]
+            return r
+        pass
+    
     def test_text_to_speech_dataset(self):      
       yaml_config = '''
       huggingface_load:
