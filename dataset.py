@@ -44,7 +44,7 @@ def _combine_datasets_generator(left, right):
         for key, value in entry.items():
             if key == 'id':
                 continue
-            elif key.startswith('text_'):
+            elif key.endswith('_text'):
                 combined_entry[key] = value
             elif key == 'audio':
                 language_key = 'audio_' + entry['audio_language']
@@ -103,9 +103,9 @@ def _matching_items(row, source_target_config):
     speaker_id_filter = source_target_config.get('speaker_id')
     for language in _ensure_list(source_target_config['language']):
         if source_target_config['type'] == 'text':
-            if row.get(f'text_{language}'):
+            if row.get(f'{language}_text'):
                 matches.append(
-                    {'text': row[f'text_{language}'],
+                    {'text': row[f'{language}_text'],
                      'language': language,
                      'origin_dataset': None, # TODO
                     })

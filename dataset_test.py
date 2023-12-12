@@ -66,22 +66,22 @@ class DatasetTestCase(unittest.TestCase):
         
         translate_data_1 = {
             'id': [1, 2, 3],
-            'text_lug': ['lug1', 'lug2', 'lug3'],
-            'text_ach': ['ach1', 'ach2', 'ach3'],
-            'text_eng': ['eng1', 'eng2', 'eng3'],
+            'lug_text': ['lug1', 'lug2', 'lug3'],
+            'ach_text': ['ach1', 'ach2', 'ach3'],
+            'eng_text': ['eng1', 'eng2', 'eng3'],
         }
 
         translate_data_2 = {
             'id': [4, 5],
-            'text_lug': ['lug4', 'lug5'],
-            'text_eng': ['eng4', 'eng5'],
+            'lug_text': ['lug4', 'lug5'],
+            'eng_text': ['eng4', 'eng5'],
         }
         
         translate_data_missing_value = {
             'id': [1, 2, 3],
-            'text_lug': ['lug1', None, 'lug3'],
-            'text_ach': ['ach1', 'ach2', 'ach3'],
-            'text_eng': ['eng1', 'eng2', 'eng3'],
+            'lug_text': ['lug1', None, 'lug3'],
+            'ach_text': ['ach1', 'ach2', 'ach3'],
+            'eng_text': ['eng1', 'eng2', 'eng3'],
         }
 
         audio_metadata = {
