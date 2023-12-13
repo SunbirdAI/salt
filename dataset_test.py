@@ -360,6 +360,43 @@ class DatasetTestCase(unittest.TestCase):
 
         self.assertEqual(list(ds), expected)
         
+        
+    def test_speech_dataset(self):
+      yaml_config = '''
+      huggingface_load:
+          path: parquet
+          data_files: PATH/audio_mock.parquet
+          split: train
+      source:
+          type: speech
+          language: lug
+      target:
+          type: text
+          language: lug
+      '''.replace('PATH', self.data_path)
+      config = yaml.safe_load(yaml_config)
+      ds = dataset.create(config)
+      
+      expected = [
+        {'source': {'path': None,
+                    'array': np.array([.1, .1, .1]),
+                    'sampling_rate': 16000},
+         'target': 'lug1'},
+        {'source': {'path': None,
+                    'array': np.array([.2, .2, .2]),
+                    'sampling_rate': 16000},
+         'target': 'lug2'},
+        {'source': {'path': None,
+                    'array': np.array([.3, .3, .3]),
+                    'sampling_rate': 16000},
+         'target': 'lug1'},
+        {'source': {'path': None,
+                    'array': np.array([.4, .4, .4]),
+                    'sampling_rate': 16000},
+         'target': 'lug2'}]
+      
+      self.assertNestedAlmostEqual(list(ds), expected)
+        
     def test_join_speech_translation_dataset(self):
       yaml_config = '''
       huggingface_load:

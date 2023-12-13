@@ -1,7 +1,6 @@
 import datasets
 import itertools
-import text_preprocessing
-import audio_preprocessing
+import preprocessing
 import functools
 
 PREPROCESS_LIST_HELP_STRING = '''
@@ -24,7 +23,6 @@ def _ensure_list(x):
     return x if isinstance(x, list) else [x]
 
 def _load_single_huggingface_dataset(load_dataset_params):
-    # TODO: If single audio file, reformat to match joined audio+translate.
     ds = datasets.load_dataset(**load_dataset_params)
     if 'train' in ds or 'test' in ds:
         raise ValueError(
@@ -32,6 +30,8 @@ def _load_single_huggingface_dataset(load_dataset_params):
             "'split: train' or 'split: train+test'. Config provided: "
             f"{load_dataset_params}. Splits found: {list(ds.keys())}."
         )
+    if 'audio_language' in ds.features and not 'language' in ds.features:
+        ds = ds.rename_column('audio_language', 'language')
     return ds
 
 def _combine_datasets_generator(left, right):
@@ -47,9 +47,9 @@ def _combine_datasets_generator(left, right):
             elif key.endswith('_text'):
                 combined_entry[key] = value
             elif key == 'audio':
-                language_key = 'audio_' + entry['audio_language']
+                language_key = 'audio_' + entry['language']
                 combined_entry.setdefault(language_key, []).append(value)
-                speaker_id_key = f'audio_{entry["audio_language"]}_speaker_id'
+                speaker_id_key = f'audio_{entry["language"]}_speaker_id'
                 combined_entry.setdefault(
                     speaker_id_key, []).append(entry['speaker_id'])
         return combined_entry
@@ -68,9 +68,13 @@ def _combine_datasets_generator(left, right):
         current_id = entry_id
         combined_entry['id'] = entry_id
         combined_entry = update_combined_entry(combined_entry, entry)
-
     if combined_entry:
         yield combined_entry
+
+def _dataset_id_from_config(load_params):
+    if 'data_files' in load_params:
+        return '+'.join(load_params['data_files'])
+    return load_params.get('path')
 
 def _load_huggingface_datasets(config):
     """Retrieve all specified HuggingFace datasets and return as a list."""
@@ -92,30 +96,34 @@ def _load_huggingface_datasets(config):
             left = _load_single_huggingface_dataset(l['join'][0])
             right = _load_single_huggingface_dataset(l['join'][1])
             ds = _combine_datasets_generator(left, right)
+            dataset_id = (_dataset_id_from_config(l['join'][0]) + ',' +
+                          _dataset_id_from_config(l['join'][1]))
         else:
             ds = _load_single_huggingface_dataset(l)
-        loaded_datasets.append(ds)
+            dataset_id = _dataset_id_from_config(l)
+        loaded_datasets.append([ds, dataset_id])
     return loaded_datasets
 
 def _matching_items(row, source_target_config):
     """Find which items in a row match the config."""
     matches = []
     speaker_id_filter = source_target_config.get('speaker_id')
+    # TODO: filter based on recording type (natural/studio/any)
     for language in _ensure_list(source_target_config['language']):
         if source_target_config['type'] == 'text':
             if row.get(f'{language}_text'):
                 matches.append(
                     {'text': row[f'{language}_text'],
                      'language': language,
-                     'origin_dataset': None, # TODO
+                     'origin_dataset': row['origin_dataset'],
                     })
         elif source_target_config['type'] == 'speech':
-            if row.get('audio_language') == language:
+            if row.get('language') == language:
                 if speaker_id_filter and row['speaker_id'] != speaker_id_filter:
                     continue
                 matches.append(
                     {'audio': row['audio'],
-                     'language': row['audio_language'],
+                     'language': row['language'],
                      'speaker_id': row['speaker_id'],
                      'is_studio': row['is_studio'],
                     })
@@ -163,9 +171,13 @@ def _matching_pairs(row, config):
 def _create_generator(config):
     '''Make a generator that yields examples according to dataset spec.'''    
     huggingface_datasets = _load_huggingface_datasets(config)
-    for ds in huggingface_datasets:
+    for ds, dataset_id in huggingface_datasets:
         for row in ds:
-            for match in _matching_pairs(row, config):
+            if 'audio' in row and 'text' in row:
+                row[row['language'] + '_text'] = row['text']
+                del row['text']
+            for match in _matching_pairs(
+                row | {'origin_dataset': dataset_id}, config):
                 yield match
 
 def _compose(functions):
@@ -203,15 +215,9 @@ def _build_source_or_target_preprocess_function(config, source_or_target):
             function_name = list(f.keys())[0]
             kwargs = f[function_name] or {}
                 
-        # Find the corresponding function definition    
-        if config[source_or_target]['type'] == 'text':
-            preprocessing_module = text_preprocessing
-        else:
-            preprocessing_module = audio_preprocessing
-            
         available_function_names = [
-            name for name in dir(preprocessing_module)
-            if callable(getattr(preprocessing_module, name))]
+            name for name in dir(preprocessing)
+            if callable(getattr(preprocessing, name))]
         
         if function_name not in available_function_names:
             raise NameError(
@@ -219,7 +225,7 @@ def _build_source_or_target_preprocess_function(config, source_or_target):
                 f'loaded. Available {config[source_or_target]["type"]} '
                 f'preprocessing functions are: {available_function_names}.')
             
-        function = getattr(preprocessing_module, function_name)            
+        function = getattr(preprocessing, function_name)            
         functions.append(
             functools.partial(function, src_or_tgt=source_or_target, **kwargs))
                 
