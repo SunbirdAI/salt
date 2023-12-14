@@ -132,6 +132,8 @@ class DatasetTestCase(unittest.TestCase):
         self.temp_dir.cleanup()
       
 
+    #TODO: audio files of different sample rates
+    
     def test_preprocessing_augmentation(self):
         def random_prefix(r, src_or_tgt):
             for i in range(len(r['source'])):

@@ -30,8 +30,20 @@ def _load_single_huggingface_dataset(load_dataset_params):
             "'split: train' or 'split: train+test'. Config provided: "
             f"{load_dataset_params}. Splits found: {list(ds.keys())}."
         )
-    if 'audio_language' in ds.features and not 'language' in ds.features:
-        ds = ds.rename_column('audio_language', 'language')
+        
+    remap_names = {
+        'audio_language': 'language',
+        'audio_languages': 'languages',
+        'ids': 'id',
+        'are_studio': 'is_studio',
+        'speaker_ids': 'speaker_id',
+        'sample_rates': 'sample_rate',
+    }
+    
+    for from_name, to_name in remap_names.items():
+        if from_name in ds.features and not to_name in ds.features:
+            ds = ds.rename_column(from_name, to_name)
+            
     return ds
 
 def _combine_datasets_generator(left, right):
@@ -72,9 +84,10 @@ def _combine_datasets_generator(left, right):
         yield combined_entry
 
 def _dataset_id_from_config(load_params):
+    id = load_params.get('path') + '_' + load_params.get('name')
     if 'data_files' in load_params:
-        return '+'.join(load_params['data_files'])
-    return load_params.get('path')
+        id += '+'.join(load_params['data_files'])
+    return id
 
 def _load_huggingface_datasets(config):
     """Retrieve all specified HuggingFace datasets and return as a list."""
