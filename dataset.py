@@ -33,7 +33,9 @@ def _load_single_huggingface_dataset(load_dataset_params):
         
     remap_names = {
         'audio_language': 'language',
-        'audio_languages': 'languages',
+        'audio_languages': 'language',
+        'audios': 'audio',
+        'texts': 'text',
         'ids': 'id',
         'are_studio': 'is_studio',
         'speaker_ids': 'speaker_id',
@@ -43,6 +45,17 @@ def _load_single_huggingface_dataset(load_dataset_params):
     for from_name, to_name in remap_names.items():
         if from_name in ds.features and not to_name in ds.features:
             ds = ds.rename_column(from_name, to_name)
+            
+    # TODO: tidy this up, workaround for audio in different formats
+    def transform_to_audio_feature(examples):
+        return {"audio": {
+            "path": None,
+            "array": examples["audio"],
+            "sampling_rate": examples["sample_rate"]
+        }}
+    
+    if 'sample_rate' in ds.features:
+        ds = ds.map(transform_to_audio_feature, remove_columns=['sample_rate'])
             
     return ds
 
@@ -84,10 +97,12 @@ def _combine_datasets_generator(left, right):
         yield combined_entry
 
 def _dataset_id_from_config(load_params):
-    id = load_params.get('path') + '_' + load_params.get('name')
+    tag = [load_params.get('path')]
+    if 'name' in load_params:
+        tag.append(load_params.get('name'))
     if 'data_files' in load_params:
-        id += '+'.join(load_params['data_files'])
-    return id
+        tag.extend(_ensure_list(load_params['data_files']))
+    return '_'.join(tag)
 
 def _load_huggingface_datasets(config):
     """Retrieve all specified HuggingFace datasets and return as a list."""
@@ -131,7 +146,7 @@ def _matching_items(row, source_target_config):
                      'origin_dataset': row['origin_dataset'],
                     })
         elif source_target_config['type'] == 'speech':
-            if row.get('language') == language:
+            if row.get('language') == language:    
                 if speaker_id_filter and row['speaker_id'] != speaker_id_filter:
                     continue
                 matches.append(
@@ -178,7 +193,7 @@ def _matching_pairs(row, config):
                     example['target.' + k] = v
                 else:
                     example['target'] = v
-
+                    
             yield example
 
 def _create_generator(config):

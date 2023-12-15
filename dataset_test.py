@@ -142,7 +142,7 @@ class DatasetTestCase(unittest.TestCase):
                 r[src_or_tgt][i] = f'>{prefix}< ' + r[src_or_tgt][i]
             return r
         
-        setattr(dataset.text_preprocessing, 'random_prefix', random_prefix)
+        setattr(dataset.preprocessing, 'random_prefix', random_prefix)
         
         yaml_config = '''
         huggingface_load:
@@ -180,8 +180,8 @@ class DatasetTestCase(unittest.TestCase):
                 r[src_or_tgt][i] = r[src_or_tgt][i] + ' ' + tag
             return r
         
-        setattr(dataset.text_preprocessing, 'prefix', prefix)
-        setattr(dataset.text_preprocessing, 'suffix', suffix)
+        setattr(dataset.preprocessing, 'prefix', prefix)
+        setattr(dataset.preprocessing, 'suffix', suffix)
         
         yaml_config = '''
         huggingface_load:
