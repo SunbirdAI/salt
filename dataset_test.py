@@ -66,22 +66,22 @@ class DatasetTestCase(unittest.TestCase):
         
         translate_data_1 = {
             'id': [1, 2, 3],
-            'text_lug': ['lug1', 'lug2', 'lug3'],
-            'text_ach': ['ach1', 'ach2', 'ach3'],
-            'text_eng': ['eng1', 'eng2', 'eng3'],
+            'lug_text': ['lug1', 'lug2', 'lug3'],
+            'ach_text': ['ach1', 'ach2', 'ach3'],
+            'eng_text': ['eng1', 'eng2', 'eng3'],
         }
 
         translate_data_2 = {
             'id': [4, 5],
-            'text_lug': ['lug4', 'lug5'],
-            'text_eng': ['eng4', 'eng5'],
+            'lug_text': ['lug4', 'lug5'],
+            'eng_text': ['eng4', 'eng5'],
         }
         
         translate_data_missing_value = {
             'id': [1, 2, 3],
-            'text_lug': ['lug1', None, 'lug3'],
-            'text_ach': ['ach1', 'ach2', 'ach3'],
-            'text_eng': ['eng1', 'eng2', 'eng3'],
+            'lug_text': ['lug1', None, 'lug3'],
+            'ach_text': ['ach1', 'ach2', 'ach3'],
+            'eng_text': ['eng1', 'eng2', 'eng3'],
         }
 
         audio_metadata = {
@@ -132,6 +132,8 @@ class DatasetTestCase(unittest.TestCase):
         self.temp_dir.cleanup()
       
 
+    #TODO: audio files of different sample rates
+    
     def test_preprocessing_augmentation(self):
         def random_prefix(r, src_or_tgt):
             for i in range(len(r['source'])):
@@ -140,7 +142,7 @@ class DatasetTestCase(unittest.TestCase):
                 r[src_or_tgt][i] = f'>{prefix}< ' + r[src_or_tgt][i]
             return r
         
-        setattr(dataset.text_preprocessing, 'random_prefix', random_prefix)
+        setattr(dataset.preprocessing, 'random_prefix', random_prefix)
         
         yaml_config = '''
         huggingface_load:
@@ -178,8 +180,8 @@ class DatasetTestCase(unittest.TestCase):
                 r[src_or_tgt][i] = r[src_or_tgt][i] + ' ' + tag
             return r
         
-        setattr(dataset.text_preprocessing, 'prefix', prefix)
-        setattr(dataset.text_preprocessing, 'suffix', suffix)
+        setattr(dataset.preprocessing, 'prefix', prefix)
+        setattr(dataset.preprocessing, 'suffix', suffix)
         
         yaml_config = '''
         huggingface_load:
@@ -359,6 +361,43 @@ class DatasetTestCase(unittest.TestCase):
         ]
 
         self.assertEqual(list(ds), expected)
+        
+        
+    def test_speech_dataset(self):
+      yaml_config = '''
+      huggingface_load:
+          path: parquet
+          data_files: PATH/audio_mock.parquet
+          split: train
+      source:
+          type: speech
+          language: lug
+      target:
+          type: text
+          language: lug
+      '''.replace('PATH', self.data_path)
+      config = yaml.safe_load(yaml_config)
+      ds = dataset.create(config)
+      
+      expected = [
+        {'source': {'path': None,
+                    'array': np.array([.1, .1, .1]),
+                    'sampling_rate': 16000},
+         'target': 'lug1'},
+        {'source': {'path': None,
+                    'array': np.array([.2, .2, .2]),
+                    'sampling_rate': 16000},
+         'target': 'lug2'},
+        {'source': {'path': None,
+                    'array': np.array([.3, .3, .3]),
+                    'sampling_rate': 16000},
+         'target': 'lug1'},
+        {'source': {'path': None,
+                    'array': np.array([.4, .4, .4]),
+                    'sampling_rate': 16000},
+         'target': 'lug2'}]
+      
+      self.assertNestedAlmostEqual(list(ds), expected)
         
     def test_join_speech_translation_dataset(self):
       yaml_config = '''
