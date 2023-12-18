@@ -1,7 +1,8 @@
 import datasets
 import itertools
-import preprocessing
 import functools
+
+from . import preprocessing
 
 PREPROCESS_LIST_HELP_STRING = '''
 Preprocessing operations should be specified as a list in yaml, for example:

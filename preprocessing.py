@@ -34,9 +34,10 @@ import string
 import random
 import sacremoses
 import functools
-from utils import single_batch_entry
 import nlpaug.augmenter.word as naw
 import nlpaug.augmenter.char as nac
+
+from .utils import single_batch_entry
 
 normalizer = sacremoses.MosesPunctNormalizer()
 

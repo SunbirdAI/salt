@@ -1,5 +1,4 @@
 import unittest
-import dataset
 import soundfile
 import pandas as pd
 import datasets
@@ -9,6 +8,8 @@ import numpy as np
 import yaml
 import random
 import string
+
+from . import dataset
 
 class DatasetTestCase(unittest.TestCase):
     def assertNestedAlmostEqual(self, expected, actual, places=3):
