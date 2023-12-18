@@ -1,4 +1,5 @@
 import functools
+from IPython import display
 
 def single_batch_entry(func):
     """Split a batch into individual items, process and then recombine."""
@@ -17,7 +18,7 @@ def single_batch_entry(func):
 def show_dataset(ds, N=10, rate=16_000):
     '''Show dataset inside a Jupyter notebook with embedded audio.'''
     def create_audio_player_from_array(audio_data_array):
-        audio_player = Audio(data=audio_data_array['array'], rate=rate)
+        audio_player = display.Audio(data=audio_data_array['array'], rate=rate)
         return audio_player._repr_html_().replace('\n','')
 
     df_audio = pd.DataFrame(ds[:N])
