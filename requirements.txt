@@ -1,3 +1,5 @@
 datasets
 nlpaug
 sacremoses
+pandas
+numpy

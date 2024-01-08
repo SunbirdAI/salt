@@ -1,4 +1,5 @@
 import unittest
+import unittest.mock
 import soundfile
 import pandas as pd
 import datasets
@@ -8,16 +9,19 @@ import numpy as np
 import yaml
 import random
 import string
+import warnings
 
 from . import dataset
 
+
+@unittest.mock.patch.dict(os.environ, {"HF_DATASETS_DISABLE_PROGRESS_BARS": "1"})
 class DatasetTestCase(unittest.TestCase):
     def assertNestedAlmostEqual(self, expected, actual, places=3):
-        """
+        '''
         Recursive function to compare nested data structures with support for
         comparing floating point numbers using assertAlmostEqual and ignores
         differences in base temporary path of file paths.
-        """
+        '''
         if isinstance(expected, (float, np.floating)):
             self.assertAlmostEqual(expected, actual, places=places)
         elif isinstance(expected, list):
@@ -111,7 +115,7 @@ class DatasetTestCase(unittest.TestCase):
                 'eng-001',
                 'eng-002',
                 'eng-001',
-                'ach-001'
+                'ach-001',
             ]
         }
 
@@ -129,12 +133,16 @@ class DatasetTestCase(unittest.TestCase):
           'audio', datasets.Audio(sampling_rate=16000))
         audio_dataset.to_parquet(f'{self.data_path}/audio_mock.parquet')
         
+        datasets.disable_progress_bar()
+        # HuggingFace datasets gives a ResourceWarning with temp files
+        warnings.simplefilter("ignore", ResourceWarning)
+        
     def tearDown(self):
         self.temp_dir.cleanup()
+        warnings.simplefilter("default", ResourceWarning)
       
 
     #TODO: audio files of different sample rates
-    
     def test_preprocessing_augmentation(self):
         def random_prefix(r, src_or_tgt):
             for i in range(len(r['source'])):
@@ -215,7 +223,7 @@ class DatasetTestCase(unittest.TestCase):
             {'source': 'two one lug2 three', 'target': 'eng2 four'},
             {'source': 'two one lug3 three', 'target': 'eng3 four'}]
 
-        self.assertEquals(list(ds), expected)
+        self.assertEqual(list(ds), expected)
    
     def test_text_to_speech_dataset(self):      
       yaml_config = '''
@@ -250,7 +258,7 @@ class DatasetTestCase(unittest.TestCase):
       ]
       
       self.assertNestedAlmostEqual(list(ds), expected)
-   
+
         
     def test_single_dataset(self):        
         yaml_config = '''
@@ -274,8 +282,8 @@ class DatasetTestCase(unittest.TestCase):
             {'source': 'lug2', 'target': 'eng2'},
             {'source': 'lug3', 'target': 'eng3'}]
 
-        self.assertEquals(list(ds), expected)
-        
+        self.assertEqual(list(ds), expected)
+   
     def test_translation_multiple_to_one(self):        
         yaml_config = '''
         huggingface_load:
@@ -362,8 +370,7 @@ class DatasetTestCase(unittest.TestCase):
         ]
 
         self.assertEqual(list(ds), expected)
-        
-        
+            
     def test_speech_dataset(self):
       yaml_config = '''
       huggingface_load:
@@ -399,7 +406,7 @@ class DatasetTestCase(unittest.TestCase):
          'target': 'lug2'}]
       
       self.assertNestedAlmostEqual(list(ds), expected)
-        
+ 
     def test_join_speech_translation_dataset(self):
       yaml_config = '''
       huggingface_load:
@@ -419,7 +426,7 @@ class DatasetTestCase(unittest.TestCase):
       '''.replace('PATH', self.data_path)
       config = yaml.safe_load(yaml_config)
       ds = dataset.create(config)
-      
+        
       expected = [
         {'source': {'path': None,
                     'array': np.array([.1, .1, .1]),
@@ -439,7 +446,7 @@ class DatasetTestCase(unittest.TestCase):
          'target': 'eng2'}]
       
       self.assertNestedAlmostEqual(list(ds), expected)
-        
+
     def test_speech_to_speech_dataset(self):
       yaml_config = '''
       huggingface_load:
@@ -476,7 +483,7 @@ class DatasetTestCase(unittest.TestCase):
       ]
 
       self.assertNestedAlmostEqual(list(ds), expected)
-      
+
 if __name__ == '__main__':
     unittest.main()
 
