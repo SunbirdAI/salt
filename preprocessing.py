@@ -62,7 +62,6 @@ def normalise_text(r, src_or_tgt):
     return r    
 
 def augment_characters(r, src_or_tgt, **char_augmentation_params):
-    print(r)
     char_augmenter = nac.RandomCharAug(**char_augmentation_params)
     r[src_or_tgt] = char_augmenter.augment(r[src_or_tgt])
     return r

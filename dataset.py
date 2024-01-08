@@ -1,10 +1,12 @@
 import datasets
 import itertools
 import functools
+import time
+import types
 
 from . import preprocessing
 
-PREPROCESS_LIST_HELP_STRING = '''
+_PREPROCESS_LIST_HELP_STRING = '''
 Preprocessing operations should be specified as a list in yaml, for example:
 
 preprocessing:
@@ -25,7 +27,7 @@ def _ensure_list(x):
 
 def _load_single_huggingface_dataset(load_dataset_params):
     ds = datasets.load_dataset(**load_dataset_params)
-    if 'train' in ds or 'test' in ds:
+    if 'train' in ds.column_names or 'test' in ds.column_names:
         raise ValueError(
             "The dataset split should be specified in config, e.g. "
             "'split: train' or 'split: train+test'. Config provided: "
@@ -46,18 +48,7 @@ def _load_single_huggingface_dataset(load_dataset_params):
     for from_name, to_name in remap_names.items():
         if from_name in ds.features and not to_name in ds.features:
             ds = ds.rename_column(from_name, to_name)
-            
-    # TODO: tidy this up, workaround for audio in different formats
-    def transform_to_audio_feature(examples):
-        return {"audio": {
-            "path": None,
-            "array": examples["audio"],
-            "sampling_rate": examples["sample_rate"]
-        }}
-    
-    if 'sample_rate' in ds.features:
-        ds = ds.map(transform_to_audio_feature, remove_columns=['sample_rate'])
-            
+                        
     return ds
 
 def _combine_datasets_generator(left, right):
@@ -124,7 +115,10 @@ def _load_huggingface_datasets(config):
                 )
             left = _load_single_huggingface_dataset(l['join'][0])
             right = _load_single_huggingface_dataset(l['join'][1])
-            ds = _combine_datasets_generator(left, right)
+            
+            generator_function = lambda: _combine_datasets_generator(left,
+                                                                     right)
+            ds = datasets.IterableDataset.from_generator(generator_function)
             dataset_id = (_dataset_id_from_config(l['join'][0]) + ',' +
                           _dataset_id_from_config(l['join'][1]))
         else:
@@ -156,7 +150,7 @@ def _matching_items(row, source_target_config):
                      'speaker_id': row['speaker_id'],
                      'is_studio': row['is_studio'],
                     })
-            if f'audio_{language}' in row:
+            if row.get(f'audio_{language}'):
                 for audio_example, speaker_id in zip(
                     row[f'audio_{language}'],
                     row[f'audio_{language}_speaker_id']):
@@ -177,6 +171,7 @@ def _matching_items(row, source_target_config):
 
 def _matching_pairs(row, config):
     """Find all source/target pairs that match the configuration."""
+    
     source_items = _matching_items(row, config['source'])
     target_items = _matching_items(row, config['target'])
     
@@ -194,20 +189,28 @@ def _matching_pairs(row, config):
                     example['target.' + k] = v
                 else:
                     example['target'] = v
-                    
             yield example
+    
 
 def _create_generator(config):
     '''Make a generator that yields examples according to dataset spec.'''    
     huggingface_datasets = _load_huggingface_datasets(config)
     for ds, dataset_id in huggingface_datasets:
-        for row in ds:
-            if 'audio' in row and 'text' in row:
-                row[row['language'] + '_text'] = row['text']
-                del row['text']
-            for match in _matching_pairs(
-                row | {'origin_dataset': dataset_id}, config):
-                yield match
+        # PyArrow data should be read in batches for speed.
+        for batch in ds.iter(batch_size=100):
+            # print('batch:', batch)
+            keys = list(batch.keys())
+            rows = [
+                {k: batch[k][i] for k in keys}
+                 for i in range(len(batch[keys[0]]))
+            ]
+            for row in rows:
+                if 'audio' in row and 'text' in row:
+                    row[row['language'] + '_text'] = row['text']
+                    del row['text']
+                for match in _matching_pairs(
+                    row | {'origin_dataset': dataset_id}, config):
+                    yield match
 
 def _compose(functions):
     def inner(arg):
@@ -227,7 +230,7 @@ def _build_source_or_target_preprocess_function(config, source_or_target):
     if isinstance(preprocess_spec, dict):
         # Easy mistake to make: specifying preprocessing ops as a dict (which
         # is not appropriate as it has no ordering). Alert the user.
-        print(PREPROCESS_LIST_HELP_STRING)
+        print(_PREPROCESS_LIST_HELP_STRING)
         raise ValueError(
             'Error found in preprocessing specification: ',
             preprocess_spec
@@ -261,13 +264,6 @@ def _build_source_or_target_preprocess_function(config, source_or_target):
     preprocess_fn = _compose(functions)        
     return preprocess_fn
     
-def _keep_only_source_and_target(row):
-    result = {
-        'source': row['source'],
-        'target': row['target'],
-    }
-    return result
-
 def _build_preprocessing_functions(config):
     '''Create functions to process source and target examples.'''
     source_preprocess_fn = _build_source_or_target_preprocess_function(
@@ -277,7 +273,6 @@ def _build_preprocessing_functions(config):
     combined_fn = _compose([
         source_preprocess_fn,
         target_preprocess_fn,
-        _keep_only_source_and_target,
     ])
     return combined_fn
     
@@ -320,43 +315,13 @@ def create(config):
             raise ValueError(
                 'A list of languages has been specified in config as a string: '
                 f'{language}. Change to [{language}] to make it a list.')
-        
-    text_features = datasets.Features({
-        'text': datasets.Value('string'),
-        'language': datasets.Value('string'),
-        'origin_dataset': datasets.Value('string'),
-
-    })
-    
-    audio_features = datasets.Features({
-        'audio': datasets.Audio(sampling_rate=16_000),
-        'language': datasets.Value('string'),
-        'speaker_id': datasets.Value('string'),
-        'is_studio': datasets.Value('bool'),
-    })
-    
-    features = {}
-    for source_or_target in ['source', 'target']:
-        if config[source_or_target]['type'] == 'text':
-            for k, v in text_features.items():
-                if k == 'text':
-                    features[source_or_target] = v
-                else:
-                    features[f'{source_or_target}.{k}'] = v
-        else:
-            for k, v in audio_features.items():
-                if k == 'audio':
-                    features[source_or_target] = v
-                else:
-                    features[f'{source_or_target}.{k}'] = v
-    
+            
     generator_function = lambda: _create_generator(config)
-    ds = datasets.Dataset.from_generator(
-        generator_function, features=datasets.Features(features))
+    ds = datasets.IterableDataset.from_generator(generator_function)
 
     # Apply preprocessing
     preprocessing_fn = _build_preprocessing_functions(config)
-    ds.set_transform(preprocessing_fn)    
+    ds = ds.map(preprocessing_fn, batched=True)  
+    if not config.get('keep_metadata_features'):
+        ds = ds.select_columns(['source', 'target'])
     return ds
-
-    
