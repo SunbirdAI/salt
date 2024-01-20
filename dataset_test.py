@@ -88,8 +88,39 @@ class DatasetTestCase(unittest.TestCase):
             'ach_text': ['ach1', 'ach2', 'ach3'],
             'eng_text': ['eng1', 'eng2', 'eng3'],
         }
-
+        
         audio_metadata = {
+            'id': [1, 1, 1, 1, 2, 2, 2, 3,],
+            'audio': [
+                f'{audio_path}/lug1.wav',
+                f'{audio_path}/lug1_studio.wav',
+                f'{audio_path}/eng1.wav',
+                f'{audio_path}/ach1.wav',
+                f'{audio_path}/lug2.wav',
+                f'{audio_path}/lug2_studio.wav',
+                f'{audio_path}/eng2.wav',
+                f'{audio_path}/eng3.wav',
+                
+            ],
+            'text': [
+              'lug1', 'lug1', 'eng1', 'ach1', 'lug2',  'lug2',  'eng2', 'eng3'],
+            'audio_language': [
+              'lug', 'lug', 'eng', 'ach', 'lug', 'lug', 'eng', 'ach'],
+            'is_studio': [
+              False, False, True, True, False, False, False, False],
+            'speaker_id': [
+                'lug-001',
+                'lug-studio-1',
+                'eng-001',
+                'ach-001',
+                'lug-002',
+                'lug-studio-1',
+                'eng-002',
+                'eng-001',
+            ]   
+        }
+
+        audio_metadata_unsorted = {
             'id': [1, 2, 1, 2, 1, 2, 3, 1],
             'audio': [
                 f'{audio_path}/lug1.wav',
@@ -132,6 +163,11 @@ class DatasetTestCase(unittest.TestCase):
         audio_dataset = datasets.Dataset.from_dict(audio_metadata).cast_column(
           'audio', datasets.Audio(sampling_rate=16000))
         audio_dataset.to_parquet(f'{self.data_path}/audio_mock.parquet')
+
+        audio_dataset_unsorted = datasets.Dataset.from_dict(audio_metadata_unsorted).cast_column(
+            'audio', datasets.Audio(sampling_rate=16000))
+        audio_dataset_unsorted.to_parquet(
+            f'{self.data_path}/audio_mock_unsorted.parquet')
         
         datasets.disable_progress_bar()
         # HuggingFace datasets gives a ResourceWarning with temp files
@@ -375,7 +411,7 @@ class DatasetTestCase(unittest.TestCase):
       yaml_config = '''
       huggingface_load:
           path: parquet
-          data_files: PATH/audio_mock.parquet
+          data_files: PATH/audio_mock_unsorted.parquet
           split: train
       source:
           type: speech
@@ -406,7 +442,7 @@ class DatasetTestCase(unittest.TestCase):
          'target': 'lug2'}]
       
       self.assertNestedAlmostEqual(list(ds), expected)
- 
+    
     def test_join_speech_translation_dataset(self):
       yaml_config = '''
       huggingface_load:
@@ -483,7 +519,9 @@ class DatasetTestCase(unittest.TestCase):
       ]
 
       self.assertNestedAlmostEqual(list(ds), expected)
-
+        
+    # TODO: check error is raised if trying to join unsorted
+    
 if __name__ == '__main__':
     unittest.main()
 

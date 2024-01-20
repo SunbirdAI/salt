@@ -3,6 +3,7 @@ import itertools
 import functools
 import time
 import types
+import heapq
 
 from . import preprocessing
 
@@ -71,10 +72,8 @@ def _combine_datasets_generator(left, right):
                     speaker_id_key, []).append(entry['speaker_id'])
         return combined_entry
 
-    # TODO: Work around the sorted() call, which requires everything in memory.
-    merged_datasets = sorted(
-        itertools.chain(left, right), key=lambda x: x['id'])
-
+    merged_datasets = heapq.merge(left, right, key=lambda x: x['id'])
+    
     current_id = None
     combined_entry = {}
     for entry in merged_datasets:
