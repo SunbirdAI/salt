@@ -177,8 +177,7 @@ class DatasetTestCase(unittest.TestCase):
         self.temp_dir.cleanup()
         warnings.simplefilter("default", ResourceWarning)
       
-
-    #TODO: audio files of different sample rates
+    
     def test_preprocessing_augmentation(self):
         def random_prefix(r, src_or_tgt):
             for i in range(len(r['source'])):
@@ -520,7 +519,9 @@ class DatasetTestCase(unittest.TestCase):
 
       self.assertNestedAlmostEqual(list(ds), expected)
         
-    # TODO: check error is raised if trying to join unsorted
+    # TODO: check error is raised if trying to join when IDs are unsorted
+    
+    # TODO: audio files of different sample rates
     
 if __name__ == '__main__':
     unittest.main()
