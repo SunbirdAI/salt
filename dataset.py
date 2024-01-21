@@ -288,11 +288,8 @@ def create(config):
       type: 'text' or 'speech'.
       recording_type: In the case of audio, 'studio', 'natural' or
           'any' (default).
-      preprocessing: list of any functions that should be applied at
-          load time (done once, same output every epoch).
-      preprocessing_on_the_fly: list of any functions that should be applied
-          subsequently, on the fly (e.g. augmentation, for different output
-          every epoch).
+      preprocessing: list of any functions that should be applied to transform
+          the data.
 
     Returns:
       dataset: A datasets.Dataset object with attributes `source` and `target`.
