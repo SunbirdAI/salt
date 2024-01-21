@@ -187,6 +187,9 @@ def _matching_pairs(row, config):
 def _create_generator(config):
     '''Make a generator that yields examples according to dataset spec.'''    
     huggingface_datasets = _load_huggingface_datasets(config)
+    # TODO: interleave datasets here, if the config has shuffled=True.
+    # joined dataset lengths have to be estimated, others are known.
+    # Mix proportionately: generate one big permutation?
     for ds, dataset_id in huggingface_datasets:
         # PyArrow data should be read in batches for speed.
         for batch in ds.iter(batch_size=1): # TODO: debugging, change back to 100
@@ -296,6 +299,7 @@ def create(config):
     """
     # TODO: checks on configuration to make sure it's valid.
     # TODO: make sample rate configurable.
+    # TODO: allow interleaving multiple datasets
    
     # Multiple source or target languages can be specified in the yaml config
     # e.g. with "language: [lug, ach]". An easy mistake is to write
