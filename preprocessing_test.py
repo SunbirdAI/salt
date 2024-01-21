@@ -1,5 +1,7 @@
 import unittest
 import re
+import numpy as np
+
 from . import preprocessing
 
 class TestPreprocessing(unittest.TestCase):
@@ -9,7 +11,8 @@ class TestPreprocessing(unittest.TestCase):
             'source': ['test sentence'],
             'source.language': ['eng'],
             'source.origin_dataset': ['salt'],
-            'target': [{'array': [1, 2, 3], 'sampling_rate': 16000}],
+            'target': [[0.1, 0.2, 0.3]],
+            'target.sample_rate': [16000],
             'target.language': ['lug'],
             'target.is_studio': [False],
         }
@@ -40,7 +43,6 @@ class TestPreprocessing(unittest.TestCase):
         self.assertEqual(result['source'], expected)
 
     def test_augment_characters(self):
-        # Real usage of RandomCharAug
         record = {'source': ['source text']}
         char_augmentation_params = {'action': 'swap'}
         result = preprocessing.augment_characters(
@@ -77,5 +79,11 @@ class TestPreprocessing(unittest.TestCase):
         result = preprocessing.lower_case(record, 'source')
         self.assertEqual(result['source'], expected)
         
+    def test_resample_audio(self):
+        result = preprocessing.set_sample_rate(
+            self.record, 'target', rate=32_000)
+        self.assertEqual(len(result['target'][0]), 6)
+        
+         
 if __name__ == '__main__':
     unittest.main()

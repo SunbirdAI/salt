@@ -13,7 +13,8 @@ Typical format of a record:
   'source': 'Some text',
   'source.language': 'eng',
   'source.origin_dataset': 'salt',
-  'target': {'array': [...], sampling_rate=16000},
+  'target': [0.0, 0.0, ...],
+  'target.sample_rate': 16000,
   'target.language': 'lug',
   'target.is_studio': False,
 }
@@ -35,6 +36,8 @@ import string
 import random
 import sacremoses
 import functools
+import numpy as np
+import librosa
 import nlpaug.augmenter.word as naw
 import nlpaug.augmenter.char as nac
 
@@ -104,5 +107,16 @@ def lower_case(r, src_or_tgt):
     r[src_or_tgt] = r[src_or_tgt].lower()
     return r
 
-
+@single_batch_entry
+def set_sample_rate(r, src_or_tgt, rate):
+    '''Resamples audio data, if the sample rate in the record is different.'''
+    current_sample_rate = r[f'{src_or_tgt}.sample_rate']
+    if current_sample_rate != rate:
+        audio_data = np.array(r[src_or_tgt])
+        resampled_audio_data = librosa.resample(
+            audio_data, orig_sr=current_sample_rate, target_sr=rate)
+        r[src_or_tgt] = resampled_audio_data
+        r[f'{src_or_tgt}.sample_rate'] = rate
+        
+    return r
     

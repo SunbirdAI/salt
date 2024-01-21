@@ -138,6 +138,7 @@ def _matching_items(row, source_target_config):
                     continue
                 matches.append(
                     {'audio': row['audio'],
+                     'sample_rate': row.get('sample_rate'),
                      'language': row['language'],
                      'speaker_id': row['speaker_id'],
                      'is_studio': row['is_studio'],
@@ -192,7 +193,7 @@ def _create_generator(config):
     # Mix proportionately: generate one big permutation?
     for ds, dataset_id in huggingface_datasets:
         # PyArrow data should be read in batches for speed.
-        for batch in ds.iter(batch_size=1): # TODO: debugging, change back to 100
+        for batch in ds.iter(batch_size=10): 
             keys = list(batch.keys())
             rows = [
                 {k: batch[k][i] for k in keys}
