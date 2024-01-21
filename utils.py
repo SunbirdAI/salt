@@ -25,7 +25,7 @@ def show_dataset(ds, N=10, rate=16_000, audio_features=[]):
             audio_player = display.Audio(data=audio_data['array'], rate=rate)
         return audio_player._repr_html_().replace('\n','')
 
-    df_audio = pd.DataFrame(ds[:N])
+    df_audio = pd.DataFrame(ds.take(N))
     for k in audio_features:
         df_audio[k] = df_audio[k].apply(create_audio_player_from_array)
 

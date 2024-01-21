@@ -3,6 +3,7 @@ import itertools
 import functools
 import time
 import types
+import heapq
 
 from . import preprocessing
 
@@ -36,19 +37,12 @@ def _load_single_huggingface_dataset(load_dataset_params):
         
     remap_names = {
         'audio_language': 'language',
-        'audio_languages': 'language',
-        'audios': 'audio',
-        'texts': 'text',
-        'ids': 'id',
-        'are_studio': 'is_studio',
-        'speaker_ids': 'speaker_id',
-        'sample_rates': 'sample_rate',
     }
     
     for from_name, to_name in remap_names.items():
         if from_name in ds.features and not to_name in ds.features:
             ds = ds.rename_column(from_name, to_name)
-                        
+                  
     return ds
 
 def _combine_datasets_generator(left, right):
@@ -71,14 +65,12 @@ def _combine_datasets_generator(left, right):
                     speaker_id_key, []).append(entry['speaker_id'])
         return combined_entry
 
-    # TODO: Work around the sorted() call, which requires everything in memory.
-    merged_datasets = sorted(
-        itertools.chain(left, right), key=lambda x: x['id'])
-
+    merged_datasets = heapq.merge(left, right, key=lambda x: int(x['id']))
+    
     current_id = None
     combined_entry = {}
     for entry in merged_datasets:
-        entry_id = entry['id']
+        entry_id = int(entry['id'])
         if entry_id != current_id and current_id is not None:
             yield combined_entry
             combined_entry = {}
@@ -195,10 +187,12 @@ def _matching_pairs(row, config):
 def _create_generator(config):
     '''Make a generator that yields examples according to dataset spec.'''    
     huggingface_datasets = _load_huggingface_datasets(config)
+    # TODO: interleave datasets here, if the config has shuffled=True.
+    # joined dataset lengths have to be estimated, others are known.
+    # Mix proportionately: generate one big permutation?
     for ds, dataset_id in huggingface_datasets:
         # PyArrow data should be read in batches for speed.
-        for batch in ds.iter(batch_size=100):
-            # print('batch:', batch)
+        for batch in ds.iter(batch_size=1): # TODO: debugging, change back to 100
             keys = list(batch.keys())
             rows = [
                 {k: batch[k][i] for k in keys}
@@ -222,7 +216,7 @@ def _compose(functions):
 def _build_source_or_target_preprocess_function(config, source_or_target):
     '''Compose the specified preprocessing ops into one function object.'''
     preprocess_spec = config[source_or_target].get('preprocessing')
-
+    
     # If nothing is specified, just return the identify function.
     if not preprocess_spec:
         return lambda x: x
@@ -267,7 +261,7 @@ def _build_source_or_target_preprocess_function(config, source_or_target):
 def _build_preprocessing_functions(config):
     '''Create functions to process source and target examples.'''
     source_preprocess_fn = _build_source_or_target_preprocess_function(
-        config, 'source')    
+        config, 'source')   
     target_preprocess_fn = _build_source_or_target_preprocess_function(
         config, 'target')    
     combined_fn = _compose([
@@ -305,6 +299,7 @@ def create(config):
     """
     # TODO: checks on configuration to make sure it's valid.
     # TODO: make sample rate configurable.
+    # TODO: allow interleaving multiple datasets
    
     # Multiple source or target languages can be specified in the yaml config
     # e.g. with "language: [lug, ach]". An easy mistake is to write
@@ -321,7 +316,8 @@ def create(config):
 
     # Apply preprocessing
     preprocessing_fn = _build_preprocessing_functions(config)
-    ds = ds.map(preprocessing_fn, batched=True)  
+    ds = ds.map(preprocessing_fn, batched=True, batch_size=10)
+    
     if not config.get('keep_metadata_features'):
         ds = ds.select_columns(['source', 'target'])
     return ds
