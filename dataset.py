@@ -296,8 +296,8 @@ def create(config):
       dataset: A datasets.Dataset object with attributes `source` and `target`.
     """
     # TODO: checks on configuration to make sure it's valid.
-    # TODO: make sample rate configurable.
     # TODO: allow interleaving multiple datasets
+    # TODO: raise warning if many rows iterated through without finding a match
    
     # Multiple source or target languages can be specified in the yaml config
     # e.g. with "language: [lug, ach]". An easy mistake is to write

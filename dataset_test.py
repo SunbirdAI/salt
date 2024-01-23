@@ -89,23 +89,25 @@ class DatasetTestCase(unittest.TestCase):
             'eng_text': ['eng1', 'eng2', 'eng3'],
         }
         
+
+                
         audio_metadata = {
             'id': [1, 1, 1, 1, 2, 2, 2, 3,],
             'audio': [
-                f'{audio_path}/lug1.wav',
-                f'{audio_path}/lug1_studio.wav',
-                f'{audio_path}/eng1.wav',
-                f'{audio_path}/ach1.wav',
-                f'{audio_path}/lug2.wav',
-                f'{audio_path}/lug2_studio.wav',
-                f'{audio_path}/eng2.wav',
-                f'{audio_path}/eng3.wav',
-                
+                [.1, .1, .1],
+                [.3, .3, .3],
+                [.5, .5, .5],
+                [.8, .8, .8],
+                [.2, .2, .2],
+                [.4, .4, .4],
+                [.6, .6, .6],
+                [.7, .7, .7],
             ],
+            'sample_rate': [16_000] * 8,
             'text': [
               'lug1', 'lug1', 'eng1', 'ach1', 'lug2',  'lug2',  'eng2', 'eng3'],
             'audio_language': [
-              'lug', 'lug', 'eng', 'ach', 'lug', 'lug', 'eng', 'ach'],
+              'lug', 'lug', 'eng', 'ach', 'lug', 'lug', 'eng', 'eng'],
             'is_studio': [
               False, False, True, True, False, False, False, False],
             'speaker_id': [
@@ -119,36 +121,39 @@ class DatasetTestCase(unittest.TestCase):
                 'eng-001',
             ]   
         }
-
+        
+        # Phrase ID 3 comes before IDs 1 and 2
         audio_metadata_unsorted = {
-            'id': [1, 2, 1, 2, 1, 2, 3, 1],
+            'id': [3, 1, 1, 1, 1, 2, 2, 2],
             'audio': [
-                f'{audio_path}/lug1.wav',
-                f'{audio_path}/lug2.wav',
-                f'{audio_path}/lug1_studio.wav',
-                f'{audio_path}/lug2_studio.wav',
-                f'{audio_path}/eng1.wav',
-                f'{audio_path}/eng2.wav',
-                f'{audio_path}/eng3.wav',
-                f'{audio_path}/ach1.wav',
+                [.7, .7, .7],
+                [.1, .1, .1],
+                [.3, .3, .3],
+                [.5, .5, .5],
+                [.8, .8, .8],
+                [.2, .2, .2],
+                [.4, .4, .4],
+                [.6, .6, .6],
             ],
+            'sample_rate': [16_000] * 8,
             'text': [
-              'lug1', 'lug2', 'lug1', 'lug2', 'eng1', 'eng2', 'eng3', 'ach1'],
+              'eng3', 'lug1', 'lug1', 'eng1', 'ach1', 'lug2',  'lug2', 'eng2'],
             'audio_language': [
-              'lug', 'lug', 'lug', 'lug', 'eng', 'eng', 'eng', 'ach'],
+              'eng', 'lug', 'lug', 'eng', 'ach', 'lug', 'lug', 'eng'],
             'is_studio': [
               False, False, True, True, False, False, False, False],
             'speaker_id': [
-                'lug-001',
-                'lug-002',
-                'lug-studio-1',
-                'lug-studio-1',
                 'eng-001',
-                'eng-002',
+                'lug-001',
+                'lug-studio-1',
                 'eng-001',
                 'ach-001',
-            ]
+                'lug-002',
+                'lug-studio-1',
+                'eng-002',
+            ]   
         }
+        
 
         temp_csv_path = f'{self.data_path}/translation_dataset_1.csv'
         pd.DataFrame(translate_data_1).to_csv(temp_csv_path, index=False)    
@@ -160,12 +165,11 @@ class DatasetTestCase(unittest.TestCase):
         pd.DataFrame(translate_data_missing_value).to_csv(
           temp_csv_path, index=False)
 
-        audio_dataset = datasets.Dataset.from_dict(audio_metadata).cast_column(
-          'audio', datasets.Audio(sampling_rate=16000))
+        audio_dataset = datasets.Dataset.from_dict(audio_metadata)
         audio_dataset.to_parquet(f'{self.data_path}/audio_mock.parquet')
 
-        audio_dataset_unsorted = datasets.Dataset.from_dict(audio_metadata_unsorted).cast_column(
-            'audio', datasets.Audio(sampling_rate=16000))
+        audio_dataset_unsorted = datasets.Dataset.from_dict(
+            audio_metadata_unsorted)
         audio_dataset_unsorted.to_parquet(
             f'{self.data_path}/audio_mock_unsorted.parquet')
         
@@ -283,13 +287,9 @@ class DatasetTestCase(unittest.TestCase):
       
       expected = [
         {'source': 'lug1',
-         'target': {'path': None,
-                    'array': np.array([.3, .3, .3]),
-                    'sampling_rate': 16000}},
+         'target': np.array([.3, .3, .3])},
         {'source': 'lug2',
-         'target': {'path': None,
-                    'array': np.array([.4, .4, .4]),
-                    'sampling_rate': 16000}},
+         'target': np.array([.4, .4, .4])},
       ]
       
       self.assertNestedAlmostEqual(list(ds), expected)
@@ -423,21 +423,13 @@ class DatasetTestCase(unittest.TestCase):
       ds = dataset.create(config)
       
       expected = [
-        {'source': {'path': None,
-                    'array': np.array([.1, .1, .1]),
-                    'sampling_rate': 16000},
+        {'source': np.array([.1, .1, .1]),
          'target': 'lug1'},
-        {'source': {'path': None,
-                    'array': np.array([.2, .2, .2]),
-                    'sampling_rate': 16000},
+        {'source': np.array([.3, .3, .3]),
+         'target': 'lug1'},
+        {'source': np.array([.2, .2, .2]),
          'target': 'lug2'},
-        {'source': {'path': None,
-                    'array': np.array([.3, .3, .3]),
-                    'sampling_rate': 16000},
-         'target': 'lug1'},
-        {'source': {'path': None,
-                    'array': np.array([.4, .4, .4]),
-                    'sampling_rate': 16000},
+        {'source': np.array([.4, .4, .4]),
          'target': 'lug2'}]
       
       self.assertNestedAlmostEqual(list(ds), expected)
@@ -463,22 +455,15 @@ class DatasetTestCase(unittest.TestCase):
       ds = dataset.create(config)
         
       expected = [
-        {'source': {'path': None,
-                    'array': np.array([.1, .1, .1]),
-                    'sampling_rate': 16000},
+        {'source': np.array([.1, .1, .1]),
          'target': 'eng1'},
-        {'source': {'path': None,
-                    'array': np.array([.3, .3, .3]),
-                    'sampling_rate': 16000},
+        {'source': np.array([.3, .3, .3]),
          'target': 'eng1'},
-        {'source': {'path': None,
-                    'array': np.array([.2, .2, .2]),
-                    'sampling_rate': 16000},
+        {'source': np.array([.2, .2, .2]),
          'target': 'eng2'},
-        {'source': {'path': None,
-                    'array': np.array([.4, .4, .4]),
-                    'sampling_rate': 16000},
-         'target': 'eng2'}]
+        {'source': np.array([.4, .4, .4]),
+         'target': 'eng2'}
+      ]
       
       self.assertNestedAlmostEqual(list(ds), expected)
 
@@ -503,18 +488,10 @@ class DatasetTestCase(unittest.TestCase):
       ds = dataset.create(config)
       
       expected = [
-        {'source': {'path': None,
-                    'array': np.array([.1, .1, .1]),
-                    'sampling_rate': 16000},
-         'target': {'path': None,
-                    'array': np.array([.8, .8, .8]),
-                    'sampling_rate': 16000}},
-        {'source': {'path': None,
-                    'array': np.array([.3, .3, .3]),
-                    'sampling_rate': 16000},
-         'target': {'path': None,
-                    'array': np.array([.8, .8, .8]),
-                    'sampling_rate': 16000}},
+        {'source': np.array([.1, .1, .1]),
+         'target': np.array([.8, .8, .8])},
+        {'source': np.array([.3, .3, .3]),
+         'target': np.array([.8, .8, .8])},
       ]
 
       self.assertNestedAlmostEqual(list(ds), expected)
