@@ -322,5 +322,6 @@ def create(config):
     ds = ds.map(preprocessing_fn, batched=True, batch_size=10)
     
     if not config.get('keep_metadata_features'):
-        ds = ds.select_columns(['source', 'target'])
+        ds = ds.select_columns(
+            ['source', 'target', 'source.language', 'target.language'])
     return ds

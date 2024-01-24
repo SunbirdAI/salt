@@ -258,9 +258,22 @@ class DatasetTestCase(unittest.TestCase):
         ds = dataset.create(config)
         
         expected = [
-            {'source': 'two one lug1 three', 'target': 'eng1 four'},
-            {'source': 'two one lug2 three', 'target': 'eng2 four'},
-            {'source': 'two one lug3 three', 'target': 'eng3 four'}]
+            {'source': 'two one lug1 three',
+             'target': 'eng1 four',
+             'source.language': 'lug',
+             'target.language': 'eng',
+            },
+            {'source': 'two one lug2 three',
+             'target': 'eng2 four',
+             'source.language': 'lug',
+             'target.language': 'eng',
+            },
+            {'source': 'two one lug3 three',
+             'target': 'eng3 four',
+             'source.language': 'lug',
+             'target.language': 'eng',
+            },
+        ]
 
         self.assertEqual(list(ds), expected)
    
@@ -287,9 +300,15 @@ class DatasetTestCase(unittest.TestCase):
       
       expected = [
         {'source': 'lug1',
-         'target': np.array([.3, .3, .3])},
+         'target': np.array([.3, .3, .3]),
+         'source.language': 'lug',
+         'target.language': 'lug',
+        },
         {'source': 'lug2',
-         'target': np.array([.4, .4, .4])},
+         'target': np.array([.4, .4, .4]),
+         'source.language': 'lug',
+         'target.language': 'lug',
+        },
       ]
       
       self.assertNestedAlmostEqual(list(ds), expected)
@@ -313,9 +332,22 @@ class DatasetTestCase(unittest.TestCase):
         ds = dataset.create(config)
         
         expected = [
-            {'source': 'lug1', 'target': 'eng1'},
-            {'source': 'lug2', 'target': 'eng2'},
-            {'source': 'lug3', 'target': 'eng3'}]
+            {'source': 'lug1',
+             'target': 'eng1',
+             'source.language': 'lug',
+             'target.language': 'eng',             
+            },
+            {'source': 'lug2',
+             'target': 'eng2',
+             'source.language': 'lug',
+             'target.language': 'eng',             
+            },
+            {'source': 'lug3',
+             'target': 'eng3',
+             'source.language': 'lug',
+             'target.language': 'eng',            
+            }
+        ]
 
         self.assertEqual(list(ds), expected)
    
@@ -337,12 +369,36 @@ class DatasetTestCase(unittest.TestCase):
         ds = dataset.create(config)
         
         expected = [
-            {'source': 'lug1', 'target': 'eng1'},
-            {'source': 'lug2', 'target': 'eng2'},
-            {'source': 'lug3', 'target': 'eng3'},
-            {'source': 'ach1', 'target': 'eng1'},
-            {'source': 'ach2', 'target': 'eng2'},
-            {'source': 'ach3', 'target': 'eng3'},
+            {'source': 'lug1',
+             'target': 'eng1',
+             'source.language': 'lug',
+             'target.language': 'eng',             
+            },
+            {'source': 'lug2',
+             'target': 'eng2',
+             'source.language': 'lug',
+             'target.language': 'eng',             
+            },
+            {'source': 'lug3',
+             'target': 'eng3',
+             'source.language': 'lug',
+             'target.language': 'eng',             
+            },
+            {'source': 'ach1',
+             'target': 'eng1',
+             'source.language': 'ach',
+             'target.language': 'eng',             
+            },
+            {'source': 'ach2',
+             'target': 'eng2',
+             'source.language': 'ach',
+             'target.language': 'eng',             
+            },
+            {'source': 'ach3',
+             'target': 'eng3',
+             'source.language': 'ach',
+             'target.language': 'eng',             
+            },
         ]
 
         self.assertCountEqual(list(ds), expected)
@@ -368,11 +424,31 @@ class DatasetTestCase(unittest.TestCase):
         ds = dataset.create(config)
         
         expected = [
-            {'source': 'lug1', 'target': 'eng1'},
-            {'source': 'lug2', 'target': 'eng2'},
-            {'source': 'lug3', 'target': 'eng3'},
-            {'source': 'lug4', 'target': 'eng4'},
-            {'source': 'lug5', 'target': 'eng5'}
+            {'source': 'lug1',
+             'target': 'eng1',
+             'source.language': 'lug',
+             'target.language': 'eng',            
+            },
+            {'source': 'lug2',
+             'target': 'eng2',
+             'source.language': 'lug',
+             'target.language': 'eng',             
+            },
+            {'source': 'lug3',
+             'target': 'eng3',
+             'source.language': 'lug',
+             'target.language': 'eng',             
+            },
+            {'source': 'lug4',
+             'target': 'eng4',
+             'source.language': 'lug',
+             'target.language': 'eng',             
+            },
+            {'source': 'lug5',
+             'target': 'eng5',
+             'source.language': 'lug',
+             'target.language': 'eng',             
+            }
         ]
 
         self.assertEqual(list(ds), expected)
@@ -398,10 +474,26 @@ class DatasetTestCase(unittest.TestCase):
         ds = dataset.create(config)
         
         expected = [
-            {'source': 'lug1', 'target': 'eng1'},
-            {'source': 'lug3', 'target': 'eng3'},
-            {'source': 'lug4', 'target': 'eng4',},
-            {'source': 'lug5', 'target': 'eng5'}
+            {'source': 'lug1',
+             'target': 'eng1',
+             'source.language': 'lug',
+             'target.language': 'eng',
+            },
+            {'source': 'lug3',
+             'target': 'eng3',
+             'source.language': 'lug',
+             'target.language': 'eng',            
+            },
+            {'source': 'lug4',
+             'target': 'eng4',
+             'source.language': 'lug',
+             'target.language': 'eng',            
+            },
+            {'source': 'lug5',
+             'target': 'eng5',
+             'source.language': 'lug',
+             'target.language': 'eng',            
+            }
         ]
 
         self.assertEqual(list(ds), expected)
@@ -424,13 +516,26 @@ class DatasetTestCase(unittest.TestCase):
       
       expected = [
         {'source': np.array([.1, .1, .1]),
-         'target': 'lug1'},
+         'target': 'lug1',
+         'source.language': 'lug',
+         'target.language': 'lug',        
+        },
         {'source': np.array([.3, .3, .3]),
-         'target': 'lug1'},
+         'target': 'lug1',
+         'source.language': 'lug',
+         'target.language': 'lug',          
+        },
         {'source': np.array([.2, .2, .2]),
-         'target': 'lug2'},
+         'target': 'lug2',
+         'source.language': 'lug',
+         'target.language': 'lug',          
+        },
         {'source': np.array([.4, .4, .4]),
-         'target': 'lug2'}]
+         'target': 'lug2',
+         'source.language': 'lug',
+         'target.language': 'lug',          
+        }
+      ]
       
       self.assertNestedAlmostEqual(list(ds), expected)
     
@@ -456,13 +561,25 @@ class DatasetTestCase(unittest.TestCase):
         
       expected = [
         {'source': np.array([.1, .1, .1]),
-         'target': 'eng1'},
+         'target': 'eng1',
+         'source.language': 'lug',
+         'target.language': 'eng',          
+        },
         {'source': np.array([.3, .3, .3]),
-         'target': 'eng1'},
+         'target': 'eng1',
+         'source.language': 'lug',
+         'target.language': 'eng',        
+        },
         {'source': np.array([.2, .2, .2]),
-         'target': 'eng2'},
+         'target': 'eng2',
+         'source.language': 'lug',
+         'target.language': 'eng',        
+        },
         {'source': np.array([.4, .4, .4]),
-         'target': 'eng2'}
+         'target': 'eng2',
+         'source.language': 'lug',
+         'target.language': 'eng',        
+        }
       ]
       
       self.assertNestedAlmostEqual(list(ds), expected)
@@ -493,13 +610,25 @@ class DatasetTestCase(unittest.TestCase):
                 
       expected = [
         {'source': np.array([.1, .1, .1]),
-         'target': 'eng1'},
+         'target': 'eng1',
+         'source.language': 'lug',
+         'target.language': 'eng',        
+        },
         {'source': np.array([.3, .3, .3]),
-         'target': 'eng1'},
+         'target': 'eng1',
+         'source.language': 'lug',
+         'target.language': 'eng',        
+        },
         {'source': np.array([.2, .2, .2]),
-         'target': 'eng2'},
+         'target': 'eng2',
+         'source.language': 'lug',
+         'target.language': 'eng',        
+        },
         {'source': np.array([.4, .4, .4]),
-         'target': 'eng2'}
+         'target': 'eng2',
+         'source.language': 'lug',
+         'target.language': 'eng',        
+        }
       ]
     
       result = list(ds)
@@ -529,9 +658,15 @@ class DatasetTestCase(unittest.TestCase):
       
       expected = [
         {'source': np.array([.1, .1, .1]),
-         'target': np.array([.8, .8, .8])},
+         'target': np.array([.8, .8, .8]),
+         'source.language': 'lug',
+         'target.language': 'ach',        
+        },
         {'source': np.array([.3, .3, .3]),
-         'target': np.array([.8, .8, .8])},
+         'target': np.array([.8, .8, .8]),
+         'source.language': 'lug',
+         'target.language': 'ach',        
+        },
       ]
 
       self.assertNestedAlmostEqual(list(ds), expected)
