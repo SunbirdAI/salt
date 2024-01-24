@@ -60,6 +60,9 @@ def _combine_datasets_generator(left, right):
             elif key == 'audio':
                 language_key = 'audio_' + entry['language']
                 combined_entry.setdefault(language_key, []).append(value)
+                sample_rate_key = f'audio_{entry["language"]}_sample_rate'
+                combined_entry.setdefault(
+                    sample_rate_key, []).append(entry['sample_rate'])                
                 speaker_id_key = f'audio_{entry["language"]}_speaker_id'
                 combined_entry.setdefault(
                     speaker_id_key, []).append(entry['speaker_id'])
@@ -138,19 +141,21 @@ def _matching_items(row, source_target_config):
                     continue
                 matches.append(
                     {'audio': row['audio'],
-                     'sample_rate': row.get('sample_rate'),
+                     'sample_rate': row['sample_rate'],
                      'language': row['language'],
                      'speaker_id': row['speaker_id'],
                      'is_studio': row['is_studio'],
                     })
             if row.get(f'audio_{language}'):
-                for audio_example, speaker_id in zip(
+                for audio_example, sample_rate, speaker_id in zip(
                     row[f'audio_{language}'],
+                    row[f'audio_{language}_sample_rate'],
                     row[f'audio_{language}_speaker_id']):
                     if speaker_id_filter and speaker_id != speaker_id_filter:
                         continue
                     matches.append({
                         'audio': audio_example,
+                        'sample_rate': sample_rate,
                         'language': language,
                         'speaker_id': speaker_id,
                         'is_studio': None,  # TODO

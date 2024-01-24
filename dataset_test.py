@@ -466,6 +466,46 @@ class DatasetTestCase(unittest.TestCase):
       ]
       
       self.assertNestedAlmostEqual(list(ds), expected)
+    
+    
+    def test_join_speech_translation_dataset_with_resample(self):
+      yaml_config = '''
+      huggingface_load:
+          join:
+            - path: parquet
+              data_files: PATH/audio_mock.parquet
+              split: train
+            - path: csv
+              data_files: PATH/translation_dataset_1.csv
+              split: train
+      source:
+          type: speech
+          language: lug
+          preprocessing:
+            - set_sample_rate:
+                rate: 32000
+      target:
+          type: text
+          language: eng
+      '''.replace('PATH', self.data_path)
+      config = yaml.safe_load(yaml_config)
+      ds = dataset.create(config)
+                
+      expected = [
+        {'source': np.array([.1, .1, .1]),
+         'target': 'eng1'},
+        {'source': np.array([.3, .3, .3]),
+         'target': 'eng1'},
+        {'source': np.array([.2, .2, .2]),
+         'target': 'eng2'},
+        {'source': np.array([.4, .4, .4]),
+         'target': 'eng2'}
+      ]
+    
+      result = list(ds)
+      for i in range(4):
+          self.assertEqual(len(result[i]['source']), 6)
+    
 
     def test_speech_to_speech_dataset(self):
       yaml_config = '''

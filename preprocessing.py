@@ -117,6 +117,6 @@ def set_sample_rate(r, src_or_tgt, rate):
             audio_data, orig_sr=current_sample_rate, target_sr=rate)
         r[src_or_tgt] = resampled_audio_data
         r[f'{src_or_tgt}.sample_rate'] = rate
-        
+    
     return r
     
