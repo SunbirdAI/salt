@@ -75,6 +75,11 @@ def _combine_datasets_generator(left, right):
     for entry in merged_datasets:
         entry_id = int(entry['id'])
         if entry_id != current_id and current_id is not None:
+            if int(entry_id) < int(current_id):
+                raise ValueError(
+                    'To join two datasets based on the `id` field, the ids '
+                    'must be in numerical sorted order within both datasets. '
+                    f'Found id {entry_id} after {current_id}.')
             yield combined_entry
             combined_entry = {}
         current_id = entry_id

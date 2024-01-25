@@ -181,7 +181,7 @@ class DatasetTestCase(unittest.TestCase):
         self.temp_dir.cleanup()
         warnings.simplefilter("default", ResourceWarning)
       
-    
+    #"""
     def test_preprocessing_augmentation(self):
         def random_prefix(r, src_or_tgt):
             for i in range(len(r['source'])):
@@ -670,11 +670,32 @@ class DatasetTestCase(unittest.TestCase):
       ]
 
       self.assertNestedAlmostEqual(list(ds), expected)
+    #"""
         
-    # TODO: check error is raised if trying to join when IDs are unsorted
-    
-    # TODO: audio files of different sample rates
-    
+    def test_join_unsorted_raises_exception(self):
+      def try_creating_unsorted():  
+          yaml_config = '''
+          huggingface_load:
+              join:
+                - path: parquet
+                  data_files: PATH/audio_mock_unsorted.parquet
+                  split: train
+                - path: csv
+                  data_files: PATH/translation_dataset_1.csv
+                  split: train
+          source:
+              type: speech
+              language: lug
+          target:
+              type: text
+              language: eng
+          '''.replace('PATH', self.data_path)
+          config = yaml.safe_load(yaml_config)
+          ds = dataset.create(config)
+          list(ds)
+      self.assertRaises(ValueError, try_creating_unsorted) 
+
+        
 if __name__ == '__main__':
     unittest.main()
 
