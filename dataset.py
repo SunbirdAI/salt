@@ -1,9 +1,11 @@
+import math
 import datasets
 import itertools
 import functools
 import time
 import types
 import heapq
+import numpy as np
 
 from . import preprocessing
 
@@ -201,22 +203,44 @@ def _create_generator(config):
     # TODO: interleave datasets here, if the config has shuffled=True.
     # joined dataset lengths have to be estimated, others are known.
     # Mix proportionately: generate one big permutation?
-    for ds, dataset_id in huggingface_datasets:
-        # PyArrow data should be read in batches for speed.
-        for batch in ds.iter(batch_size=10): 
-            keys = list(batch.keys())
-            rows = [
-                {k: batch[k][i] for k in keys}
-                 for i in range(len(batch[keys[0]]))
-            ]
-            for row in rows:
-                if 'audio' in row and 'text' in row:
-                    row[row['language'] + '_text'] = row['text']
-                    del row['text']
-                for match in _matching_pairs(
-                    row | {'origin_dataset': dataset_id}, config):
-                    yield match
-
+    def _yield_matches(batch, config, dataset_id):
+        keys = list(batch.keys())
+        rows = [
+            {k: batch[k][i] for k in keys}
+             for i in range(len(batch[keys[0]]))
+        ]
+        for row in rows:
+            if 'audio' in row and 'text' in row:
+                row[row['language'] + '_text'] = row['text']
+                del row['text']
+            for match in _matching_pairs(
+                row | {'origin_dataset': dataset_id}, config):
+                yield match
+                
+    # PyArrow data should be read in batches for speed.
+    PYARROW_BATCH_SIZE = 10
+            
+    if config.get('shuffle') and len(huggingface_datasets) > 1:
+        # If there are multiple datasets concatenated and 'shuffle' is
+        # specified, then we want to randomly interleave them.
+        iterators = [d[0].iter(batch_size=PYARROW_BATCH_SIZE)
+                     for d in huggingface_datasets]
+        iterator_order = []
+        for i in range(len(huggingface_datasets)):
+            num_batches = math.ceil(
+                len(huggingface_datasets[i][0]) / PYARROW_BATCH_SIZE)
+            iterator_order.extend([i] * num_batches)
+        permutation = np.random.permutation(len(iterator_order))
+        iterator_order = np.array(iterator_order)[permutation]                              
+        for iterator_id in iterator_order:
+            batch = next(iterators[iterator_id])
+            yield from _yield_matches(
+                batch, config, huggingface_datasets[iterator_id][1]) 
+    else:
+        for ds, dataset_id in huggingface_datasets:  
+            for batch in ds.iter(batch_size=PYARROW_BATCH_SIZE): 
+                yield from _yield_matches(batch, config, dataset_id)                                
+                
 def _compose(functions):
     def inner(arg):
         for f in functions:

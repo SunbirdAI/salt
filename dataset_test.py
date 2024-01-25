@@ -88,8 +88,18 @@ class DatasetTestCase(unittest.TestCase):
             'ach_text': ['ach1', 'ach2', 'ach3'],
             'eng_text': ['eng1', 'eng2', 'eng3'],
         }
+           
+        translate_data_a = {
+            'id': range(1000),
+            'lug_text': ['a1'] * 1000,
+            'eng_text': ['a2'] * 1000,
+        }
         
-
+        translate_data_b = {
+            'id': range(1000),
+            'lug_text': ['b1'] * 1000,
+            'eng_text': ['b2'] * 1000,
+        }
                 
         audio_metadata = {
             'id': [1, 1, 1, 1, 2, 2, 2, 3,],
@@ -164,7 +174,13 @@ class DatasetTestCase(unittest.TestCase):
         temp_csv_path = f'{self.data_path}/translation_missing_value.csv'
         pd.DataFrame(translate_data_missing_value).to_csv(
           temp_csv_path, index=False)
-
+        
+        temp_csv_path = f'{self.data_path}/translation_dataset_a1k.csv'
+        pd.DataFrame(translate_data_a).to_csv(temp_csv_path, index=False)
+        
+        temp_csv_path = f'{self.data_path}/translation_dataset_b1k.csv'
+        pd.DataFrame(translate_data_b).to_csv(temp_csv_path, index=False)
+   
         audio_dataset = datasets.Dataset.from_dict(audio_metadata)
         audio_dataset.to_parquet(f'{self.data_path}/audio_mock.parquet')
 
@@ -172,7 +188,7 @@ class DatasetTestCase(unittest.TestCase):
             audio_metadata_unsorted)
         audio_dataset_unsorted.to_parquet(
             f'{self.data_path}/audio_mock_unsorted.parquet')
-        
+
         datasets.disable_progress_bar()
         # HuggingFace datasets gives a ResourceWarning with temp files
         warnings.simplefilter("ignore", ResourceWarning)
@@ -181,7 +197,6 @@ class DatasetTestCase(unittest.TestCase):
         self.temp_dir.cleanup()
         warnings.simplefilter("default", ResourceWarning)
       
-    #"""
     def test_preprocessing_augmentation(self):
         def random_prefix(r, src_or_tgt):
             for i in range(len(r['source'])):
@@ -670,7 +685,6 @@ class DatasetTestCase(unittest.TestCase):
       ]
 
       self.assertNestedAlmostEqual(list(ds), expected)
-    #"""
         
     def test_join_unsorted_raises_exception(self):
       def try_creating_unsorted():  
@@ -695,6 +709,54 @@ class DatasetTestCase(unittest.TestCase):
           list(ds)
       self.assertRaises(ValueError, try_creating_unsorted) 
 
+
+    def test_two_datasets_shuffled(self):        
+        yaml_config = '''
+        huggingface_load:
+          - path: csv
+            data_files: PATH/translation_dataset_a1k.csv
+            split: train
+          - path: csv
+            data_files: PATH/translation_dataset_b1k.csv
+            split: train
+        source:
+            type: text
+            language: lug
+        target:
+            type: text
+            language: eng
+        shuffle: True
+        '''.replace('PATH', self.data_path)
+
+        config = yaml.safe_load(yaml_config)
+        ds = dataset.create(config)
+        result = list(ds)
+        # Test the As and Bs are mixed up - there should be two different values
+        # in the first 1k rows.
+        self.assertEqual(len(set([row['source'] for row in result[:1000]])), 2)
+
+        yaml_config = '''
+        huggingface_load:
+          - path: csv
+            data_files: PATH/translation_dataset_a1k.csv
+            split: train
+          - path: csv
+            data_files: PATH/translation_dataset_b1k.csv
+            split: train
+        source:
+            type: text
+            language: lug
+        target:
+            type: text
+            language: eng
+        shuffle: False
+        '''.replace('PATH', self.data_path)
+
+        config = yaml.safe_load(yaml_config)
+        ds = dataset.create(config)
+        result = list(ds)
+        # Without shuffling it should only be the value from dataset A
+        self.assertEqual(len(set([row['source'] for row in result[:1000]])), 1)   
         
 if __name__ == '__main__':
     unittest.main()
