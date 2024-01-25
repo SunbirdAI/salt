@@ -127,6 +127,10 @@ def _load_huggingface_datasets(config):
             ds = _load_single_huggingface_dataset(l)
             dataset_id = _dataset_id_from_config(l)
         loaded_datasets.append([ds, dataset_id])
+        
+    if config.get('shuffle'):
+        loaded_datasets = [[ds[0].shuffle(), ds[1]] for ds in loaded_datasets]
+        
     return loaded_datasets
 
 def _matching_items(row, source_target_config):
@@ -330,8 +334,6 @@ def create(config):
       dataset: A datasets.Dataset object with attributes `source` and `target`.
     """
     # TODO: checks on configuration to make sure it's valid.
-    # TODO: allow interleaving multiple datasets
-    # TODO: raise warning if many rows iterated through without finding a match
    
     # Multiple source or target languages can be specified in the yaml config
     # e.g. with "language: [lug, ach]". An easy mistake is to write
@@ -345,6 +347,9 @@ def create(config):
             
     generator_function = lambda: _create_generator(config)
     ds = datasets.IterableDataset.from_generator(generator_function)
+    
+    if config.get('shuffle'):
+        ds = ds.shuffle()
 
     # Apply preprocessing
     preprocessing_fn = _build_preprocessing_functions(config)
