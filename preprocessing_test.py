@@ -45,6 +45,13 @@ class TestPreprocessing(unittest.TestCase):
         result = preprocessing.clean_text(record, 'source')
         self.assertEqual(result['source'], expected)
 
+    def test_capitalise_source_and_target(self):
+        record = {'source': ['some words'], 'target': ['translated']}
+        result = preprocessing.random_capitalise_source_and_target(
+            record, 'source', p=1.0)
+        self.assertEqual(result['source'], ['SOME WORDS'])
+        self.assertEqual(result['target'], ['TRANSLATED'])
+        
     def test_augment_characters(self):
         record = {'source': ['source text']}
         char_augmentation_params = {'action': 'swap'}

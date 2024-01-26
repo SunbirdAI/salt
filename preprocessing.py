@@ -103,6 +103,13 @@ def lower_case(r, src_or_tgt):
     return r
 
 @single_batch_entry
+def random_capitalise_source_and_target(r, src_or_tgt, p=0.005):
+    if np.random.random() < p:
+        r['source'] = r['source'].upper()
+        r['target'] = r['target'].upper()
+    return r
+
+@single_batch_entry
 def set_sample_rate(r, src_or_tgt, rate):
     '''Resamples audio data, if the sample rate in the record is different.'''
     current_sample_rate = r[f'{src_or_tgt}.sample_rate']
