@@ -325,13 +325,12 @@ def create(config):
       language: Either an ISO 639-2 language code (e.g. 'eng', 'lug'),
           or a list of codes.
       type: 'text' or 'speech'.
-      recording_type: In the case of audio, 'studio', 'natural' or
-          'any' (default).
       preprocessing: list of any functions that should be applied to transform
           the data.
 
     Returns:
-      dataset: A datasets.Dataset object with attributes `source` and `target`.
+      dataset: A datasets.Dataset object with attributes `source`, `target`,
+          `source.language` and `target.language`.
     """
     # TODO: checks on configuration to make sure it's valid.
    

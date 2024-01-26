@@ -34,7 +34,7 @@ to each function at once. The structure of the input is then e.g.:
 import re
 import string
 import random
-import sacremoses
+import cleantext
 import functools
 import numpy as np
 import librosa
@@ -43,8 +43,6 @@ import nlpaug.augmenter.char as nac
 
 from .utils import single_batch_entry
 
-normalizer = sacremoses.MosesPunctNormalizer()
-
 
 @single_batch_entry
 def prefix_target_language(r, src_or_tgt):
@@ -52,19 +50,33 @@ def prefix_target_language(r, src_or_tgt):
     return r
 
 @single_batch_entry
-def sentence_format(r, src_or_tgt, add_full_stop=True):
-    '''Begin with a capital letter, and optionally end with full stop.'''
-    text = r[src_or_tgt]
-    text = text[0].capitalize() + text[1:]
-    if text[-1] not in ['.', '!', '?'] and add_full_stop:
-        text = text + '.'
-    r[src_or_tgt] = text
+def match_target_sentence_format_to_source(r, src_or_tgt):
+    '''Match the sentence formatting of the target text to the source text.
+    
+    Sets the capitalisation of the first letter in the target text, and
+    the presence of a trailing full stop, to match whatever is in the source
+    text.'''
+    if r['source'][0].isupper():
+        r['target'] = r['target'][0].upper() + r['target'][1:]
+    else:
+        r['target'] = r['target'][0].lower() + r['target'][1:]
+        
+    source_has_full_stop = (r['source'][-1] == '.')
+    target_has_full_stop = (r['target'][-1] == '.')
+    
+    if source_has_full_stop and not target_has_full_stop:
+        r['target'] = r['target'] + '.' 
+        
+    if target_has_full_stop and not source_has_full_stop:
+        r['target'] = r['target'][:-1]
+        
     return r
 
 @single_batch_entry
-def normalise_text(r, src_or_tgt):
-    r[src_or_tgt] = normalizer.normalize(r[src_or_tgt])
-    return r    
+def clean_text(r, src_or_tgt, **clean_text_args):
+    r[src_or_tgt] = cleantext.clean(
+        r[src_or_tgt], to_ascii=False, lower=False, **clean_text_args)
+    return r
 
 def augment_characters(r, src_or_tgt, **char_augmentation_params):
     char_augmenter = nac.RandomCharAug(**char_augmentation_params)
@@ -76,30 +88,13 @@ def augment_words(r, src_or_tgt, **word_augmentation_params):
     r[src_or_tgt] = word_augmenter.augment(r[src_or_tgt])
     return r
 
-def remove_punctuation(r, src_or_tgt, punctuation_chars=None):
-    default_punctuation_chars = [
-        ",",
-        "?",
-        ".",
-        "!",
-        "-",
-        ";",
-        ":",
-        '""',
-        "%",
-        "'",
-        '"',
-        "�",
-        "'",
-        "\u2018",
-        "\u2019",
-    ]
-    chars_to_remove = punctuation_chars or default_punctuation_chars
-    chars_to_remove_regex = f'[{"".join(chars_to_remove)}]'
-    
-    for i in range(len(r[src_or_tgt])):
-        r[src_or_tgt][i] = re.sub(chars_to_remove_regex, "", r[src_or_tgt][i])
-        
+@single_batch_entry
+def clean_and_remove_punctuation(r, src_or_tgt, **clean_text_args):
+    r[src_or_tgt] = cleantext.clean(
+        r[src_or_tgt], to_ascii=False, no_punct=True, **clean_text_args)
+    # The cleantext library doesn't remove all punctuation marks.
+    r[src_or_tgt] = r[src_or_tgt].translate(
+        str.maketrans('', '', string.punctuation))
     return r
     
 @single_batch_entry

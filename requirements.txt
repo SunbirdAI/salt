@@ -1,6 +1,7 @@
 datasets
 nlpaug
-sacremoses
 pandas
 numpy
 librosa
+unidecode
+clean-text
