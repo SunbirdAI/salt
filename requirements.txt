@@ -5,3 +5,4 @@ numpy
 librosa
 unidecode
 clean-text
+evaluate
