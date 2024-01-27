@@ -3,3 +3,4 @@ nlpaug
 sacremoses
 pandas
 numpy
+librosa

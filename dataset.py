@@ -138,6 +138,7 @@ def _matching_items(row, source_target_config):
                     continue
                 matches.append(
                     {'audio': row['audio'],
+                     'sample_rate': row.get('sample_rate'),
                      'language': row['language'],
                      'speaker_id': row['speaker_id'],
                      'is_studio': row['is_studio'],
@@ -192,7 +193,7 @@ def _create_generator(config):
     # Mix proportionately: generate one big permutation?
     for ds, dataset_id in huggingface_datasets:
         # PyArrow data should be read in batches for speed.
-        for batch in ds.iter(batch_size=1): # TODO: debugging, change back to 100
+        for batch in ds.iter(batch_size=10): 
             keys = list(batch.keys())
             rows = [
                 {k: batch[k][i] for k in keys}
@@ -288,11 +289,8 @@ def create(config):
       type: 'text' or 'speech'.
       recording_type: In the case of audio, 'studio', 'natural' or
           'any' (default).
-      preprocessing: list of any functions that should be applied at
-          load time (done once, same output every epoch).
-      preprocessing_on_the_fly: list of any functions that should be applied
-          subsequently, on the fly (e.g. augmentation, for different output
-          every epoch).
+      preprocessing: list of any functions that should be applied to transform
+          the data.
 
     Returns:
       dataset: A datasets.Dataset object with attributes `source` and `target`.
