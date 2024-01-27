@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import functools
 
 def multilingual_eval(eval_preds,
                       source_language,
