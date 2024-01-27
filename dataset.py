@@ -1,9 +1,11 @@
+import math
 import datasets
 import itertools
 import functools
 import time
 import types
 import heapq
+import numpy as np
 
 from . import preprocessing
 
@@ -60,6 +62,9 @@ def _combine_datasets_generator(left, right):
             elif key == 'audio':
                 language_key = 'audio_' + entry['language']
                 combined_entry.setdefault(language_key, []).append(value)
+                sample_rate_key = f'audio_{entry["language"]}_sample_rate'
+                combined_entry.setdefault(
+                    sample_rate_key, []).append(entry['sample_rate'])                
                 speaker_id_key = f'audio_{entry["language"]}_speaker_id'
                 combined_entry.setdefault(
                     speaker_id_key, []).append(entry['speaker_id'])
@@ -72,6 +77,11 @@ def _combine_datasets_generator(left, right):
     for entry in merged_datasets:
         entry_id = int(entry['id'])
         if entry_id != current_id and current_id is not None:
+            if int(entry_id) < int(current_id):
+                raise ValueError(
+                    'To join two datasets based on the `id` field, the ids '
+                    'must be in numerical sorted order within both datasets. '
+                    f'Found id {entry_id} after {current_id}.')
             yield combined_entry
             combined_entry = {}
         current_id = entry_id
@@ -117,6 +127,10 @@ def _load_huggingface_datasets(config):
             ds = _load_single_huggingface_dataset(l)
             dataset_id = _dataset_id_from_config(l)
         loaded_datasets.append([ds, dataset_id])
+        
+    if config.get('shuffle'):
+        loaded_datasets = [[ds[0].shuffle(), ds[1]] for ds in loaded_datasets]
+        
     return loaded_datasets
 
 def _matching_items(row, source_target_config):
@@ -138,19 +152,21 @@ def _matching_items(row, source_target_config):
                     continue
                 matches.append(
                     {'audio': row['audio'],
-                     'sample_rate': row.get('sample_rate'),
+                     'sample_rate': row['sample_rate'],
                      'language': row['language'],
                      'speaker_id': row['speaker_id'],
                      'is_studio': row['is_studio'],
                     })
             if row.get(f'audio_{language}'):
-                for audio_example, speaker_id in zip(
+                for audio_example, sample_rate, speaker_id in zip(
                     row[f'audio_{language}'],
+                    row[f'audio_{language}_sample_rate'],
                     row[f'audio_{language}_speaker_id']):
                     if speaker_id_filter and speaker_id != speaker_id_filter:
                         continue
                     matches.append({
                         'audio': audio_example,
+                        'sample_rate': sample_rate,
                         'language': language,
                         'speaker_id': speaker_id,
                         'is_studio': None,  # TODO
@@ -191,22 +207,44 @@ def _create_generator(config):
     # TODO: interleave datasets here, if the config has shuffled=True.
     # joined dataset lengths have to be estimated, others are known.
     # Mix proportionately: generate one big permutation?
-    for ds, dataset_id in huggingface_datasets:
-        # PyArrow data should be read in batches for speed.
-        for batch in ds.iter(batch_size=10): 
-            keys = list(batch.keys())
-            rows = [
-                {k: batch[k][i] for k in keys}
-                 for i in range(len(batch[keys[0]]))
-            ]
-            for row in rows:
-                if 'audio' in row and 'text' in row:
-                    row[row['language'] + '_text'] = row['text']
-                    del row['text']
-                for match in _matching_pairs(
-                    row | {'origin_dataset': dataset_id}, config):
-                    yield match
-
+    def _yield_matches(batch, config, dataset_id):
+        keys = list(batch.keys())
+        rows = [
+            {k: batch[k][i] for k in keys}
+             for i in range(len(batch[keys[0]]))
+        ]
+        for row in rows:
+            if 'audio' in row and 'text' in row:
+                row[row['language'] + '_text'] = row['text']
+                del row['text']
+            for match in _matching_pairs(
+                row | {'origin_dataset': dataset_id}, config):
+                yield match
+                
+    # PyArrow data should be read in batches for speed.
+    PYARROW_BATCH_SIZE = 10
+            
+    if config.get('shuffle') and len(huggingface_datasets) > 1:
+        # If there are multiple datasets concatenated and 'shuffle' is
+        # specified, then we want to randomly interleave them.
+        iterators = [d[0].iter(batch_size=PYARROW_BATCH_SIZE)
+                     for d in huggingface_datasets]
+        iterator_order = []
+        for i in range(len(huggingface_datasets)):
+            num_batches = math.ceil(
+                len(huggingface_datasets[i][0]) / PYARROW_BATCH_SIZE)
+            iterator_order.extend([i] * num_batches)
+        permutation = np.random.permutation(len(iterator_order))
+        iterator_order = np.array(iterator_order)[permutation]                              
+        for iterator_id in iterator_order:
+            batch = next(iterators[iterator_id])
+            yield from _yield_matches(
+                batch, config, huggingface_datasets[iterator_id][1]) 
+    else:
+        for ds, dataset_id in huggingface_datasets:  
+            for batch in ds.iter(batch_size=PYARROW_BATCH_SIZE): 
+                yield from _yield_matches(batch, config, dataset_id)                                
+                
 def _compose(functions):
     def inner(arg):
         for f in functions:
@@ -287,17 +325,14 @@ def create(config):
       language: Either an ISO 639-2 language code (e.g. 'eng', 'lug'),
           or a list of codes.
       type: 'text' or 'speech'.
-      recording_type: In the case of audio, 'studio', 'natural' or
-          'any' (default).
       preprocessing: list of any functions that should be applied to transform
           the data.
 
     Returns:
-      dataset: A datasets.Dataset object with attributes `source` and `target`.
+      dataset: A datasets.Dataset object with attributes `source`, `target`,
+          `source.language` and `target.language`.
     """
     # TODO: checks on configuration to make sure it's valid.
-    # TODO: make sample rate configurable.
-    # TODO: allow interleaving multiple datasets
    
     # Multiple source or target languages can be specified in the yaml config
     # e.g. with "language: [lug, ach]". An easy mistake is to write
@@ -311,11 +346,15 @@ def create(config):
             
     generator_function = lambda: _create_generator(config)
     ds = datasets.IterableDataset.from_generator(generator_function)
+    
+    if config.get('shuffle'):
+        ds = ds.shuffle()
 
     # Apply preprocessing
     preprocessing_fn = _build_preprocessing_functions(config)
     ds = ds.map(preprocessing_fn, batched=True, batch_size=10)
     
     if not config.get('keep_metadata_features'):
-        ds = ds.select_columns(['source', 'target'])
+        ds = ds.select_columns(
+            ['source', 'target', 'source.language', 'target.language'])
     return ds

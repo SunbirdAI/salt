@@ -22,26 +22,36 @@ class TestPreprocessing(unittest.TestCase):
         result = preprocessing.prefix_target_language(self.record, 'source')
         self.assertEqual(result['source'], expected)
 
-    def test_sentence_format(self):
-        # Test with default add_full_stop
-        record = {'source': ['test sentence']}
-        expected = ['Test sentence.']
-        result = preprocessing.sentence_format(record, 'source')
+    def test_match_target_sentence_format_to_source(self):
+        # Full_stop in source
+        record = {'source': ['test sentence.'],
+                  'target': ['translated sentence']}
+        expected = ['translated sentence.']
+        result = preprocessing.match_target_sentence_format_to_source(
+            record, 'target')
+        self.assertEqual(result['target'], expected)
+        
+        # Initial capital and no full stop
+        record = {'source': ['Test sentence'],
+                  'target': ['translated sentence.']}
+        expected = ['Translated sentence']
+        result = preprocessing.match_target_sentence_format_to_source(
+            record, 'target')
+        self.assertEqual(result['target'], expected)
+
+    def test_clean_text(self):
+        record = {'source': ['\\u2018Hello\\u2019 &lt;']}
+        expected = ["'Hello' <"]
+        result = preprocessing.clean_text(record, 'source')
         self.assertEqual(result['source'], expected)
 
-        # Test without full stop
-        record = {'source': ['test sentence']}
-        expected = ['Test sentence']
-        result = preprocessing.sentence_format(
-            record, 'source', add_full_stop=False)
-        self.assertEqual(result['source'], expected)
-
-    def test_normalise_text(self):
-        record = {'source': ['“Hello, World!”']}
-        expected = ['"Hello, World!"']
-        result = preprocessing.normalise_text(record, 'source')
-        self.assertEqual(result['source'], expected)
-
+    def test_capitalise_source_and_target(self):
+        record = {'source': ['some words'], 'target': ['translated']}
+        result = preprocessing.random_capitalise_source_and_target(
+            record, 'source', p=1.0)
+        self.assertEqual(result['source'], ['SOME WORDS'])
+        self.assertEqual(result['target'], ['TRANSLATED'])
+        
     def test_augment_characters(self):
         record = {'source': ['source text']}
         char_augmentation_params = {'action': 'swap'}
@@ -61,10 +71,10 @@ class TestPreprocessing(unittest.TestCase):
         self.assertNotEqual(['source text'], record['source'])
         self.assertEqual(len('source text'), len(record['source'][0]))
 
-    def test_remove_punctuation(self):
-        record = {'source': ['hello, world!']}
+    def test_clean_and_remove_punctuation(self):
+        record = {'source': ['&lt;hello,&gt; world!']}
         expected = ['hello world']
-        result = preprocessing.remove_punctuation(record, 'source')
+        result = preprocessing.clean_and_remove_punctuation(record, 'source')
         self.assertEqual(result['source'], expected)
 
     def test_lower_case(self):
