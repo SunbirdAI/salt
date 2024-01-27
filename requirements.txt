@@ -6,3 +6,4 @@ librosa
 unidecode
 clean-text
 evaluate
+sacrebleu

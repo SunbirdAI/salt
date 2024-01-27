@@ -59,16 +59,22 @@ def multilingual_eval(eval_preds,
     return result
 
 def multilingual_eval_fn(eval_dataset,
-                         metric,
-                         metric_name,
+                         metrics,
                          tokenizer,
                          log_first_N_predictions=3):
     '''Return a function with the signature `eval_fn(preds)`.'''
    
-    df = pd.DataFrame(ds)
+    df = pd.DataFrame(eval_dataset)
     source_language = list(df['source.language'])
     target_language = list(df['target.language'])
     
+    metric_names = []
+    for m in metrics:
+        if m.name == 'sacrebleu':
+            metric_names.append('BLEU')
+        else:
+            metric_names.append(m.name)
+        
     return functools.partial(multilingual_eval,
                              source_language,
                              target_language,
