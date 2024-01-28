@@ -12,9 +12,6 @@ def multilingual_eval(eval_preds,
     '''Compute metric scores for each source and target language combination.'''
     
     predictions, labels = eval_preds
-    if isinstance(predictions, tuple):
-        predictions = predictions[0]
-
     decoded_predictions = tokenizer.batch_decode(
         predictions, skip_special_tokens=True)
 
@@ -23,13 +20,15 @@ def multilingual_eval(eval_preds,
     decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
 
     if log_first_N_predictions:
+        print('First N predictions in eval set:')
         for i in range(log_first_N_predictions):
-            print(f'prediction: {decoded_predictions[i]}, '
-                  f'true: {decoded_labels[i]}')
+            print(f'Prediction ({source_language[i]} to {target_language[i]}):'
+                  f' {decoded_predictions[i]}, '
+                  f'True label: {decoded_labels[i]}')
 
     subsets = {}
     for i in range(len(predictions)):
-        language_combination = source_language[i] + '_' + target_language[i]
+        language_combination = source_language[i] + '2' + target_language[i]
         if language_combination not in subsets:
             subsets[language_combination] = {'predictions': [], 'labels': []}
         subsets[language_combination]['predictions'].append(
@@ -62,7 +61,7 @@ def multilingual_eval(eval_preds,
 def multilingual_eval_fn(eval_dataset,
                          metrics,
                          tokenizer,
-                         log_first_N_predictions=3):
+                         log_first_N_predictions=0):
     '''Return a function with the signature `eval_fn(preds)`.'''
    
     df = pd.DataFrame(eval_dataset)
@@ -76,10 +75,11 @@ def multilingual_eval_fn(eval_dataset,
         else:
             metric_names.append(m.name)
         
-    return functools.partial(multilingual_eval,
-                             source_language,
-                             target_language,
-                             metrics,
-                             metric_names,
-                             tokenizer,
-                             log_first_N_predictions=log_first_N_predictions)
+    return lambda x: multilingual_eval(
+        x,
+        source_language,
+        target_language,
+        metrics,
+        metric_names,
+        tokenizer,
+        log_first_N_predictions=log_first_N_predictions)
