@@ -1,6 +1,6 @@
 site_name: Leb Documentation
 theme:
-  name: "material"
+  name: "readthedocs"
 plugins:
   - mkdocstrings
 
