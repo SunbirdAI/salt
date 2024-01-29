@@ -1,16 +1,3 @@
-This part of the project documentation focuses on a
-**learning-oriented** approach. You'll learn how to
-get started with the code in this project.
+Leb, inspired by the Luo word for 'language,' is a project dedicated to the seamless integration of Sunbird AI Language Technology. Our goal is to empower developers to effortlessly create machine learning models for Neural Machine Translation (NMT), Speech-to-Text (STT), Text-to-Speech (TTS), and other language-related applications.
 
-> **Note:** Expand this section by considering the
-> following points:
-
-- Help newcomers with getting started
-- Teach readers about your library by making them
-    write code
-- Inspire confidence through examples that work for
-    everyone, repeatably
-- Give readers an immediate sense of achievement
-- Show concrete examples, no abstractions
-- Provide the minimum necessary explanation
-- Avoid any distractions
+By drawing inspiration from the Luo concept of 'language' itself, Project Leb is envisioned as a springboard for connecting ideas and cultures across the Africa's diverse range of tongues and dialects. Just as languages connect people, this technology would connect languages - old and new - through an inclusive platform optimized for integration, accessibility, and human-centric design.
