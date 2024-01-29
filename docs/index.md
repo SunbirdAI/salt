@@ -3,9 +3,6 @@ This site contains the project documentation for the `leb` project used for the 
 
 # Leb Documentation
 
-
-# Leb Documentation
-
 Welcome to the Leb project documentation!
 
 This documentation serves as the official guide for the **Leb** project, which is part of the [Sunbird AI Language Projects](https://sunbird.ai/portfolio/african-languages/). The goal of this documentation is to provide you with comprehensive information on how to use the Leb project effectively.
