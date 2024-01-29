@@ -1,0 +1,6 @@
+site_name: Leb Documentation
+theme:
+  name: "material"
+plugins:
+  - mkdocstrings
+
