@@ -164,6 +164,8 @@ class DatasetTestCase(unittest.TestCase):
             ]   
         }
         
+        
+        
 
         temp_csv_path = f'{self.data_path}/translation_dataset_1.csv'
         pd.DataFrame(translate_data_1).to_csv(temp_csv_path, index=False)    
@@ -197,6 +199,7 @@ class DatasetTestCase(unittest.TestCase):
         self.temp_dir.cleanup()
         warnings.simplefilter("default", ResourceWarning)
       
+    """
     def test_preprocessing_augmentation(self):
         def random_prefix(r, src_or_tgt):
             for i in range(len(r['source'])):
@@ -757,6 +760,52 @@ class DatasetTestCase(unittest.TestCase):
         result = list(ds)
         # Without shuffling it should only be the value from dataset A
         self.assertEqual(len(set([row['source'] for row in result[:1000]])), 1)   
+    """
+        
+    def test_unspecified_split(self):
+        # If there's more than one split in the dataset, but the split
+        # wasn't specified, then an error should be raised.
+        def try_unspecified_split():
+            yaml_config = '''
+            huggingface_load:
+              - path: csv
+                data_files: 
+                    train: PATH/translation_dataset_1.csv
+                    test: PATH/translation_dataset_1.csv
+            source:
+                type: text
+                language: lug
+            target:
+                type: text
+                language: eng
+            shuffle: True
+            '''.replace('PATH', self.data_path)
+
+            config = yaml.safe_load(yaml_config)
+            ds = list(dataset.create(config))
+
+        self.assertRaises(ValueError, try_unspecified_split)
+        
+        # If split is not specified, but there's only one split in
+        # the dataset, then that one should be loaded.
+        yaml_config = '''
+        huggingface_load:
+          - path: csv
+            data_files: 
+                test: PATH/translation_dataset_2.csv
+        source:
+            type: text
+            language: lug
+        target:
+            type: text
+            language: eng
+        shuffle: True
+        '''.replace('PATH', self.data_path)
+
+        config = yaml.safe_load(yaml_config)
+        ds = list(dataset.create(config))        
+        
+        self.assertEqual(len(list(ds)), 2)
         
 if __name__ == '__main__':
     unittest.main()

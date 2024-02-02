@@ -44,6 +44,15 @@ import nlpaug.augmenter.char as nac
 from .utils import single_batch_entry
 
 
+
+@single_batch_entry
+def prefix_dataset_tag(r, src_or_tgt, tags=None):
+    '''If the origin dataset name matches a string, prefix a tag to the text.'''
+    for origin, tag in tags.items():
+        if origin in r[f'{src_or_tgt}.origin_dataset']:
+            r[src_or_tgt] = tag + ' ' + r[src_or_tgt]
+    return r
+
 @single_batch_entry
 def prefix_target_language(r, src_or_tgt):
     r[src_or_tgt] = f'>>{r["target.language"]}<< ' + r[src_or_tgt]

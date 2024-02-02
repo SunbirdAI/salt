@@ -94,6 +94,18 @@ class TestPreprocessing(unittest.TestCase):
             self.record, 'target', rate=32_000)
         self.assertEqual(len(result['target'][0]), 6)
         
+    def test_prefix_dataset_tag(self):
+        record = {
+            'source': ['test 1', 'test 2', 'test 3'],
+            'source.origin_dataset': [
+                'id-source1-train', 'id-source2-train', 'id-source1-train'
+            ]}
+        tags = {'source1': '<1>', 'source2': '<2>'}
+        result = preprocessing.prefix_dataset_tag(
+            record, 'source', **{'tags': tags})
+        expected = ['<1> test 1', '<2> test 2', '<1> test 3']
+        self.assertEqual(result['source'], expected)
+        
          
 if __name__ == '__main__':
     unittest.main()
