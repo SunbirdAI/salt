@@ -31,11 +31,17 @@ def _ensure_list(x):
 def _load_single_huggingface_dataset(load_dataset_params):
     ds = datasets.load_dataset(**load_dataset_params)
     if 'train' in ds.column_names or 'test' in ds.column_names:
-        raise ValueError(
-            "The dataset split should be specified in config, e.g. "
-            "'split: train' or 'split: train+test'. Config provided: "
-            f"{load_dataset_params}. Splits found: {list(ds.keys())}."
-        )
+        split_names = list(ds.column_names.keys())
+        # If the split wasn't specified, but there's only one, then just go
+        # ahead and load that one.
+        if len(split_names) == 1:
+            ds = ds[split_names[0]]
+        else:
+            raise ValueError(
+                "The dataset split should be specified in config, e.g. "
+                "'split: train' or 'split: train+test'. Config provided: "
+                f"{load_dataset_params}. Splits found: {list(ds.keys())}."
+            )
         
     remap_names = {
         'audio_language': 'language',
@@ -95,7 +101,12 @@ def _dataset_id_from_config(load_params):
     if 'name' in load_params:
         tag.append(load_params.get('name'))
     if 'data_files' in load_params:
-        tag.extend(_ensure_list(load_params['data_files']))
+        if isinstance(load_params['data_files'], dict):
+            tag.extend(''.join(
+                "{!r}".format(val)
+                for (key,val) in load_params['data_files'].items()))
+        else:
+            tag.extend(_ensure_list(load_params['data_files']))
     return '_'.join(tag)
 
 def _load_huggingface_datasets(config):

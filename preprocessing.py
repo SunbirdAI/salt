@@ -46,7 +46,7 @@ from .utils import single_batch_entry
 
 
 @single_batch_entry
-def add_dataset_tag(r, src_or_tgt, tags=None):
+def prefix_dataset_tag(r, src_or_tgt, tags=None):
     '''If the origin dataset name matches a string, prefix a tag to the text.'''
     for origin, tag in tags.items():
         if origin in r[f'{src_or_tgt}.origin_dataset']:
