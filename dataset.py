@@ -30,8 +30,8 @@ def _ensure_list(x):
 
 def _load_single_huggingface_dataset(load_dataset_params):
     ds = datasets.load_dataset(**load_dataset_params)
-    if 'train' in ds.column_names or 'test' in ds.column_names:
-        split_names = list(ds.column_names.keys())
+    if isinstance(ds, datasets.DatasetDict):
+        split_names = list(ds.data.keys())
         # If the split wasn't specified, but there's only one, then just go
         # ahead and load that one.
         if len(split_names) == 1:
