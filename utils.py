@@ -23,18 +23,21 @@ def show_dataset(ds, N=10, rate=16_000, audio_features=[]):
     '''Show dataset inside a Jupyter notebook with embedded audio.'''
     def create_audio_player_from_array(audio_data):   
         if isinstance(audio_data, dict) and 'array' in audio_data:
-            audio_player = display.Audio(data=audio_data['array'], rate=rate)
+            audio_player = Audio(data=audio_data['array'], rate=rate)
         else:
-            audio_player = display.Audio(data=audio_data, rate=rate) 
-        return audio_player._repr_html_().replace('\n','')
+            audio_player = Audio(data=audio_data, rate=rate)
+        return audio_player._repr_html_().replace('\n', '')
 
     df_audio = pd.DataFrame(ds.take(N))
-    for k in audio_features:
-        df_audio[k] = df_audio[k].apply(create_audio_player_from_array)
+    for k in list(df_audio.columns):
+        if k in audio_features:
+            df_audio[k] = df_audio[k].apply(create_audio_player_from_array)
+        else:
+            df_audio[k] = df_audio[k].apply(
+                lambda x: html.escape(x) if isinstance(x, str) else x)
 
     display.display(display.HTML(df_audio.to_html(escape=False)))
-
-    
+        
 @dataclass
 class DataCollatorCTCWithPadding:
     """

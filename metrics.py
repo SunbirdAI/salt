@@ -23,8 +23,8 @@ def multilingual_eval(eval_preds,
         print('First N predictions in eval set:')
         for i in range(log_first_N_predictions):
             print(f'Prediction ({source_language[i]} to {target_language[i]}):'
-                  f' {decoded_predictions[i]}, '
-                  f'True label: {decoded_labels[i]}')
+                  f' "{decoded_predictions[i]}", '
+                  f'True label: "{decoded_labels[i]}"')
 
     subsets = {}
     for i in range(len(predictions)):

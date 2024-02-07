@@ -130,4 +130,8 @@ def set_sample_rate(r, src_or_tgt, rate):
         r[f'{src_or_tgt}.sample_rate'] = rate
     
     return r
+
+# TODO: Check that the order of preprocessing operations makes sense. For
+# example, don't call match_target_sentence_format_to_source after 
+# prefix_dataset_tag (because then the tag is part of the text)
     
