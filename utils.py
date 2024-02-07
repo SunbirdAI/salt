@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import html
 import functools
 from typing import Union
 import pandas as pd
