@@ -17,10 +17,12 @@ def multilingual_eval(eval_preds,
         return f
     
     predictions, labels = eval_preds
+    # Replace -100 values as we can't decode them.
+    predictions = np.where(
+      predictions != -100, predictions, tokenizer.pad_token_id)
     decoded_predictions = tokenizer.batch_decode(
         predictions, skip_special_tokens=True)
 
-    # Replace -100 in the labels as we can't decode them.
     labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
     decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
 
@@ -65,7 +67,6 @@ def multilingual_eval(eval_preds,
             result[f'{metric_name}_mean'] = np.nan
 
     result = {k: _round_if_float(v, 3) for k, v in result.items()}
-    print('result', result)
     return result
 
 def multilingual_eval_fn(eval_dataset,
