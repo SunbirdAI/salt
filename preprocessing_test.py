@@ -105,7 +105,6 @@ class TestPreprocessing(unittest.TestCase):
             record, 'source', **{'tags': tags})
         expected = ['<1> test 1', '<2> test 2', '<1> test 3']
         self.assertEqual(result['source'], expected)
-        
-         
+               
 if __name__ == '__main__':
     unittest.main()
