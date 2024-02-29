@@ -209,6 +209,17 @@ def _matching_pairs(row, config):
                     example['target.' + k] = v
                 else:
                     example['target'] = v
+                    
+            if (example['source.language'] == example['target.language'] and
+                not config.get('allow_same_src_and_tgt_language', True)):
+                continue
+            
+            required_language = config.get('src_or_tgt_languages_must_contain')
+            if required_language:
+                if not (example['source.language'] == required_language or
+                        example['target.language'] == required_language):
+                    continue
+                
             yield example
     
 
