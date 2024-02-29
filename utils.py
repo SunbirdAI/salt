@@ -5,6 +5,7 @@ from typing import Union
 import pandas as pd
 from IPython import display
 import transformers
+import torch
 
 def single_batch_entry(func):
     """Split a batch into individual items, process and then recombine."""
@@ -38,7 +39,8 @@ def show_dataset(ds, N=10, rate=16_000, audio_features=[]):
                 lambda x: html.escape(x) if isinstance(x, str) else x)
 
     display.display(display.HTML(df_audio.to_html(escape=False)))
-        
+
+    
 @dataclass
 class DataCollatorCTCWithPadding:
     """
@@ -92,3 +94,80 @@ class DataCollatorCTCWithPadding:
         
         batch["labels"] = labels
         return batch
+
+    
+class TrainableM2MForConditionalGeneration(
+    transformers.M2M100ForConditionalGeneration):
+    '''
+    M2M100ForConditionalGeneration trainable with multiple target languages.
+    
+    The Facebook M2M models (NLLB, mBART, M2M100) cannot be trained with
+    multiple target languages as is, because their `generate()` functions
+    require `forced_bos_token_id`, but the model call does not. We add a dummy
+    input here so that `forced_bos_token_id` can be added to input batches
+    during training without raising an error.
+    '''
+    def forward(
+        self,
+        input_ids=None,
+        attention_mask=None,
+        decoder_input_ids=None,
+        decoder_attention_mask=None,
+        head_mask=None,
+        decoder_head_mask=None,
+        cross_attn_head_mask=None,
+        encoder_outputs=None,
+        past_key_values=None,
+        inputs_embeds=None,
+        decoder_inputs_embeds=None,
+        labels=None,
+        use_cache=None,
+        output_attentions=None,
+        output_hidden_states=None,
+        return_dict=None,
+        forced_bos_token_id=None,  # Ignored
+    ):
+        return super().forward(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            decoder_input_ids=decoder_input_ids,
+            decoder_attention_mask=decoder_attention_mask,
+            head_mask=head_mask,
+            decoder_head_mask=decoder_head_mask,
+            cross_attn_head_mask=cross_attn_head_mask,
+            encoder_outputs=encoder_outputs,
+            past_key_values=past_key_values,
+            inputs_embeds=inputs_embeds,
+            decoder_inputs_embeds=decoder_inputs_embeds,
+            labels=labels,
+            use_cache=use_cache,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict,
+        )
+
+
+class ForcedVariableBOSTokenLogitsProcessor(transformers.LogitsProcessor):
+    '''LogitsProcessor which allows the forced BOS token to be different for
+    each example in a batch. By default there is only a single BOS token used
+    in every training example.
+    
+    Usage to replace the default `ForcedBOSTokenLogitsProcessor`, so that it
+    is used automatically in training and generation:
+    
+    ```
+    transformers.generation.utils.ForcedBOSTokenLogitsProcessor = ForcedVariableBOSTokenLogitsProcessor
+    ``` 
+    '''
+    def __init__(self, bos_token_id: int):
+        self.bos_token_id = bos_token_id
+
+    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor) -> torch.FloatTensor:
+        cur_len = input_ids.shape[-1]
+        if cur_len == 1:
+            batch_size = input_ids.shape[0]
+            num_tokens = scores.shape[1]
+            for j in range(batch_size):
+                scores[j, :] = -float("inf")
+                scores[j, self.bos_token_id[j]] = 0
+        return scores
