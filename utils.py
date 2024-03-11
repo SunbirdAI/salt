@@ -5,7 +5,9 @@ from typing import Union
 import pandas as pd
 from IPython import display
 import transformers
+from transformers import TrainerCallback
 import torch
+import mlflow
 
 def single_batch_entry(func):
     """Split a batch into individual items, process and then recombine."""
@@ -95,7 +97,30 @@ class DataCollatorCTCWithPadding:
         batch["labels"] = labels
         return batch
 
-    
+
+class MlflowExtendedLoggingCallback(TrainerCallback):
+    """
+    A custom callback that logs metrics (training loss, validation loss, eval_WER) to MLflow after every logging step.
+    """
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        """
+        Called every logging_steps during training. Use this for training metrics.
+        """
+        if logs is not None:
+            # Check if 'loss' key is in logs, log it as training loss
+            if "loss" in logs:
+                mlflow.log_metrics({"train_loss": logs["loss"]}, step=state.global_step)
+
+    def on_evaluate(self, args, state, control, metrics=None, **kwargs):
+        """
+        Called at the end of the evaluation phase. Use this for evaluation metrics like WER and validation loss.
+        """
+        if metrics is not None:
+            # Log evaluation metrics to MLflow, including WER and validation loss if available
+            metrics_to_log = {key: value for key, value in metrics.items() if key in ["eval_loss", "eval_wer"]}
+            mlflow.log_metrics(metrics_to_log, step=state.global_step)
+
+
 class TrainableM2MForConditionalGeneration(
     transformers.M2M100ForConditionalGeneration):
     '''

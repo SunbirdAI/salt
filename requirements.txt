@@ -1,4 +1,4 @@
-datasets>=2.16.1
+datasets==2.16.1
 nlpaug
 pandas
 numpy
@@ -7,3 +7,4 @@ unidecode
 clean-text
 evaluate
 sacrebleu
+mlflow
