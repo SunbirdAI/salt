@@ -10,12 +10,19 @@ def multilingual_eval(eval_preds,
                       tokenizer,
                       log_first_N_predictions):
     '''Compute metric scores for each source and target language combination.'''
+    def _round_if_float(f, p):
+      if isinstance(f, float):
+        return round(f, p)
+      else:
+        return f
     
     predictions, labels = eval_preds
+    # Replace -100 values as we can't decode them.
+    predictions = np.where(
+      predictions != -100, predictions, tokenizer.pad_token_id)
     decoded_predictions = tokenizer.batch_decode(
         predictions, skip_special_tokens=True)
 
-    # Replace -100 in the labels as we can't decode them.
     labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
     decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
 
@@ -23,12 +30,12 @@ def multilingual_eval(eval_preds,
         print('First N predictions in eval set:')
         for i in range(log_first_N_predictions):
             print(f'Prediction ({source_language[i]} to {target_language[i]}):'
-                  f' {decoded_predictions[i]}, '
-                  f'True label: {decoded_labels[i]}')
+                  f' "{decoded_predictions[i]}", '
+                  f'True label: "{decoded_labels[i]}"')
 
     subsets = {}
     for i in range(len(predictions)):
-        language_combination = source_language[i] + '2' + target_language[i]
+        language_combination = source_language[i] + '_' + target_language[i]
         if language_combination not in subsets:
             subsets[language_combination] = {'predictions': [], 'labels': []}
         subsets[language_combination]['predictions'].append(
@@ -50,12 +57,16 @@ def multilingual_eval(eval_preds,
                 raise ValueError('Only BLEU and WER metrics currently '
                                  'supported.')
             result[f'{metric_name}_{subset}'] = r 
-        
-    result[f'{metric_name}_mean'] = np.mean(
-        [result[f'{metric_name}_{subset}'] for subset in list(subsets.keys())]
-    )
+            
+            
+        subset_values = [result[f'{metric_name}_{subset}']
+                         for subset in list(subsets.keys())]  
+        try:
+            result[f'{metric_name}_mean'] = np.mean(subset_values)
+        except TypeError:
+            result[f'{metric_name}_mean'] = np.nan
 
-    result = {k: round(v, 3) for k, v in result.items()}
+    result = {k: _round_if_float(v, 3) for k, v in result.items()}
     return result
 
 def multilingual_eval_fn(eval_dataset,
