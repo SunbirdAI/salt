@@ -27,9 +27,9 @@ def show_dataset(ds, N=10, rate=16_000, audio_features=[]):
     '''Show dataset inside a Jupyter notebook with embedded audio.'''
     def create_audio_player_from_array(audio_data):   
         if isinstance(audio_data, dict) and 'array' in audio_data:
-            audio_player = Audio(data=audio_data['array'], rate=rate)
+            audio_player = display.Audio(data=audio_data['array'], rate=rate)
         else:
-            audio_player = Audio(data=audio_data, rate=rate)
+            audio_player = display.Audio(data=audio_data, rate=rate)
         return audio_player._repr_html_().replace('\n', '')
 
     df_audio = pd.DataFrame(ds.take(N))
