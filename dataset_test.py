@@ -199,7 +199,6 @@ class DatasetTestCase(unittest.TestCase):
         self.temp_dir.cleanup()
         warnings.simplefilter("default", ResourceWarning)
       
-    """
     def test_preprocessing_augmentation(self):
         def random_prefix(r, src_or_tgt):
             for i in range(len(r['source'])):
@@ -760,7 +759,6 @@ class DatasetTestCase(unittest.TestCase):
         result = list(ds)
         # Without shuffling it should only be the value from dataset A
         self.assertEqual(len(set([row['source'] for row in result[:1000]])), 1)   
-    """
         
     def test_unspecified_split(self):
         # If there's more than one split in the dataset, but the split
