@@ -368,7 +368,9 @@ def create(config):
     Args:
       huggingface_load : Dict containing keyword arguments to HuggingFace
           datasets.load_dataset(), or a list of dicts to load multiple
-          datasets.
+          datasets. The dataset should be in SALT format, as per
+          hf.co/datasets/sunbird/salt. Common Voice is also supported, if
+          loaded from the `mozilla-foundation/common_voice_13_0` repo.
       source: Dict containing source specification, as below.
       target: Dict containing target specification, as below.
       shuffle: Whether to shuffle the data after loading (default False).
@@ -383,6 +385,8 @@ def create(config):
     Returns:
       dataset: A datasets.Dataset object with attributes `source`, `target`,
           `source.language` and `target.language`.
+          
+    See notebooks/Leb test.ipynb for example usage.
     """
     # TODO: checks on configuration to make sure it's valid.
    
