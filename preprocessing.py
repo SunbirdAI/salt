@@ -98,12 +98,17 @@ def augment_words(r, src_or_tgt, **word_augmentation_params):
     return r
 
 @single_batch_entry
-def clean_and_remove_punctuation(r, src_or_tgt, **clean_text_args):
+def clean_and_remove_punctuation(
+    r, src_or_tgt, allowed_punctuation=None, **clean_text_args):
     r[src_or_tgt] = cleantext.clean(
-        r[src_or_tgt], to_ascii=False, no_punct=True, **clean_text_args)
-    # The cleantext library doesn't remove all punctuation marks.
-    r[src_or_tgt] = r[src_or_tgt].translate(
-        str.maketrans('', '', string.punctuation))
+        r[src_or_tgt], to_ascii=False, no_punct=False, **clean_text_args)
+    
+    punct = list(string.punctuation)
+    if allowed_punctuation:
+        for allowed in allowed_punctuation:
+            punct.remove(allowed)
+        
+    r[src_or_tgt] = ''.join([c for c in r[src_or_tgt] if c not in punct])
     return r
     
 @single_batch_entry
