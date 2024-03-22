@@ -100,7 +100,7 @@ class DataCollatorCTCWithPadding:
 
 class MlflowExtendedLoggingCallback(TrainerCallback):
     """
-    A custom callback that logs metrics (training loss, validation loss, eval_WER) to MLflow after every logging step.
+    A custom callback that logs training loss and evaluation metrics to MLflow. Useful to track performance at every logging step.
     """
     def on_log(self, args, state, control, logs=None, **kwargs):
         """
@@ -110,15 +110,18 @@ class MlflowExtendedLoggingCallback(TrainerCallback):
             # Check if 'loss' key is in logs, log it as training loss
             if "loss" in logs:
                 mlflow.log_metrics({"train_loss": logs["loss"]}, step=state.global_step)
+                # print(f"Logged Training Loss: {logs['loss']} at step: {state.global_step}")
 
     def on_evaluate(self, args, state, control, metrics=None, **kwargs):
         """
         Called at the end of the evaluation phase. Use this for evaluation metrics like WER and validation loss.
         """
         if metrics is not None:
-            # Log evaluation metrics to MLflow, including WER and validation loss if available
-            metrics_to_log = {key: value for key, value in metrics.items() if key in ["eval_loss", "eval_wer"]}
+            # Log all metrics with the prefix "eval" to MLflow.
+            metrics_to_log = {key: value for key, value in metrics.items() if "eval" in key}
             mlflow.log_metrics(metrics_to_log, step=state.global_step)
+            # print(f"Logged Evaluation Metrics: {metrics_to_log} at step: {state.global_step}")
+
 
 
 class TrainableM2MForConditionalGeneration(
