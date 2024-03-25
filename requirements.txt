@@ -7,4 +7,5 @@ unidecode
 clean-text
 evaluate
 sacrebleu
+mlflow
 soundfile>=0.12.1

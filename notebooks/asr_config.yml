@@ -1,0 +1,73 @@
+# For monolingual training, such as only luganda language speech to text:
+# 1. Define one language in the language list of line 12 and 2. Retain only a single language in the train and dev paths
+common_source: &common_source
+  type: speech
+  language: [lug,eng]
+  preprocessing:
+    - set_sample_rate:
+        rate: 16_000
+
+common_target: &common_target
+  type: text
+  language: [lug,eng]
+  preprocessing:
+    - lower_case
+    - clean_and_remove_punctuation:
+        allowed_punctuation: "'"
+
+pretrained_model: facebook/mms-1b-all
+pretrained_adapter: lug
+
+training_args:
+    output_dir: stt
+    per_device_train_batch_size: 24
+    gradient_accumulation_steps: 2
+    evaluation_strategy: steps
+    max_steps: 800
+    gradient_checkpointing: True
+    fp16: True
+    save_steps: 400
+    eval_steps: 200
+    logging_steps: 50
+    learning_rate: 3.0e-4
+    warmup_steps: 100
+    save_total_limit: 2
+    # push_to_hub: True
+    load_best_model_at_end: True
+    metric_for_best_model: loss
+    greater_is_better: False
+    weight_decay: 0.01
+
+Wav2Vec2ForCTC_args:
+    attention_dropout: 0.0
+    hidden_dropout: 0.0
+    feat_proj_dropout: 0.0
+    layerdrop: 0.0
+    ctc_loss_reduction: mean
+    ignore_mismatched_sizes: True
+
+train:
+    huggingface_load:
+        - path: mozilla-foundation/common_voice_13_0
+          split: train
+          name: lg
+          trust_remote_code: True
+        - path: Sunbird/salt
+          name: multispeaker-lug
+          split: train
+        - path: Sunbird/salt
+          name: multispeaker-eng
+          split: train[:1000]
+    source: *common_source
+    target: *common_target
+    shuffle: True
+validation:
+    huggingface_load:
+        - path: Sunbird/salt
+          name: multispeaker-lug
+          split: dev
+        - path: Sunbird/salt
+          name: multispeaker-eng
+          split: dev
+    source: *common_source
+    target: *common_target
