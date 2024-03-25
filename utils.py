@@ -184,7 +184,7 @@ class ForcedVariableBOSTokenLogitsProcessor(transformers.LogitsProcessor):
     is used automatically in training and generation:
     
     ```
-    transformers.generation.utils.ForcedBOSTokenLogitsProcessor = ForcedVariableBOSTokenLogitsProcessor
+    transformers.generation.utils.ForcedBOSTokenLogitsProcessor = leb.utils.ForcedVariableBOSTokenLogitsProcessor
     ``` 
     '''
     def __init__(self, bos_token_id: int):

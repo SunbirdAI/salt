@@ -28,6 +28,21 @@ preprocessing:
 def _ensure_list(x):
     return x if isinstance(x, list) else [x]
 
+def _common_voice_to_SALT(batch, language):
+    '''Remap a Common Voice format batch to SALT format.'''
+    
+    # Process the whole batch at once
+    batch_size = len(batch['sentence'])
+    # Transform data
+    batch['id'] = [-1] * batch_size # TODO: create sequential IDs
+    batch['sample_rate'] = [example['sampling_rate'] for example in batch['audio']]
+    batch['audio'] = [example['array'] for example in batch['audio']]
+    batch['text'] = batch['sentence']
+    batch['language'] = [language] * batch_size
+    batch['speaker_id'] = [0] * batch_size
+    batch['is_studio'] = [False] * batch_size
+    return batch
+
 def _load_single_huggingface_dataset(load_dataset_params):
     ds = datasets.load_dataset(**load_dataset_params)
     if isinstance(ds, datasets.DatasetDict):
@@ -50,6 +65,18 @@ def _load_single_huggingface_dataset(load_dataset_params):
     for from_name, to_name in remap_names.items():
         if from_name in ds.features and not to_name in ds.features:
             ds = ds.rename_column(from_name, to_name)
+            
+    # If this is a Common Voice dataset, then remap it to SALT format.
+    if load_dataset_params['path'] == 'mozilla-foundation/common_voice_13_0':
+        if load_dataset_params['name'] == 'lg':
+            language = 'lug'
+        else:
+            language = load_dataset_params['name']
+            raise Warning(
+                'Not sure how to map the Common Voice subset '
+               f'{load_dataset_params["name"]} to a SALT language code.')
+        ds.set_transform(
+            lambda x: _common_voice_to_SALT(x, language))
                   
     return ds
 
@@ -235,7 +262,10 @@ def _create_generator(config):
             {k: batch[k][i] for k in keys}
              for i in range(len(batch[keys[0]]))
         ]
-        for row in rows:
+        for row in rows:  
+            # The audio SALT datasets are in a slightly different format
+            # to the translation data, each row having a 'text' and 'language'
+            # field.
             if 'audio' in row and 'text' in row:
                 row[row['language'] + '_text'] = row['text']
                 del row['text']
@@ -338,7 +368,9 @@ def create(config):
     Args:
       huggingface_load : Dict containing keyword arguments to HuggingFace
           datasets.load_dataset(), or a list of dicts to load multiple
-          datasets.
+          datasets. The dataset should be in SALT format, as per
+          hf.co/datasets/sunbird/salt. Common Voice is also supported, if
+          loaded from the `mozilla-foundation/common_voice_13_0` repo.
       source: Dict containing source specification, as below.
       target: Dict containing target specification, as below.
       shuffle: Whether to shuffle the data after loading (default False).
@@ -353,6 +385,8 @@ def create(config):
     Returns:
       dataset: A datasets.Dataset object with attributes `source`, `target`,
           `source.language` and `target.language`.
+          
+    See notebooks/Leb test.ipynb for example usage.
     """
     # TODO: checks on configuration to make sure it's valid.
    

@@ -76,6 +76,13 @@ class TestPreprocessing(unittest.TestCase):
         expected = ['hello world']
         result = preprocessing.clean_and_remove_punctuation(record, 'source')
         self.assertEqual(result['source'], expected)
+        
+        record = {'source': ["Hello! I'm here."]}
+        expected = ["hello i'm here"]
+        result = preprocessing.clean_and_remove_punctuation(
+            record, 'source', allowed_punctuation="'")
+        self.assertEqual(result['source'], expected)
+        
 
     def test_lower_case(self):
         record = {'source': ['HELLO, WoRld.']}
