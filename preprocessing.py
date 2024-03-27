@@ -141,6 +141,38 @@ def augment_audio_noise(r,
     return r
 
 @single_batch_entry
+def augment_audio_time_masking(r,
+                               src_or_tgt,
+                               num_masks_min=2,
+                               num_masks_max=4,
+                               max_mask_duration_ms=100):
+    """Apply time masking to an audio signal, with cutouts of random duration.
+
+    Args:
+        r: row of the dataset to be augmented.
+        num_masks_min, num_masks_max: int, the range of masked periods is
+            randomly chosen in this range.
+        max_mask_duration_ms: int, the maximum duration of a mask in
+            milliseconds.
+    """
+    audio_masked = np.copy(r[src_or_tgt]) # Avoid modifying the original
+    
+    # Convert maximum mask duration from milliseconds to number of samples
+    sample_rate = r[f'{src_or_tgt}.sample_rate']
+    max_mask_duration_samples = int((sample_rate / 1000) * max_mask_duration_ms)
+    
+    num_masks = np.random.randint(num_masks_min, num_masks_max)
+    total_time_steps = len(audio_masked)
+    
+    for _ in range(num_masks):
+        mask_duration = np.random.randint(0, max_mask_duration_samples + 1)  
+        t0 = np.random.randint(0, total_time_steps - mask_duration + 1)
+        audio_masked[t0:t0 + mask_duration] = 0
+
+    r[src_or_tgt] = audio_masked
+    return r
+
+@single_batch_entry
 def clean_and_remove_punctuation(
     r, src_or_tgt, allowed_punctuation=None, **clean_text_args):
     r[src_or_tgt] = cleantext.clean(
