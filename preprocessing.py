@@ -40,6 +40,7 @@ import numpy as np
 import librosa
 import nlpaug.augmenter.word as naw
 import nlpaug.augmenter.char as nac
+import nlpaug.augmenter.audio as naa
 
 from .utils import single_batch_entry
 
@@ -95,6 +96,48 @@ def augment_characters(r, src_or_tgt, **char_augmentation_params):
 def augment_words(r, src_or_tgt, **word_augmentation_params):
     word_augmenter = naw.RandomWordAug(**word_augmentation_params)
     r[src_or_tgt] = word_augmenter.augment(r[src_or_tgt])
+    return r
+
+@single_batch_entry
+def augment_audio_noise(r, 
+                        src_or_tgt,
+                        max_relative_amplitude = .5,
+                        max_coverage = .6,
+                        min_coverage = .1):
+    '''Add random noise to an audio sample.
+    
+    Args:
+        x: list or np.Array containing audio.
+        max_relative_amplitude: max noise amplitude relative to the largest
+            value in the source array x. The value chosen is uniform in the
+            range (0, max_amplitude_relative).
+        max_coverage: largest proportion of the audio sample that will have
+            noise added. A value of 1 means that potentially the entire sample
+            can have noise added.
+        min_coverage: smallest proportion of the audio sample that can have
+            noise added. The coverage for a particular sample is randomly chosen
+            in the range (min_coverage, max_coverage), and a segment of this
+            length is randomly selected from the sample.
+    '''
+    
+    x = r[src_or_tgt]
+    if not isinstance(x, np.ndarray):
+        x = np.array(x)
+
+    x_max = np.amax(np.abs(x))
+    amplitude = np.random.uniform(0, max_relative_amplitude) * x_max
+    coverage = np.random.uniform(min_coverage, max_coverage)
+    num_samples_to_affect = int(len(x) * coverage)
+    start_index = np.random.randint(0, len(x) - num_samples_to_affect)
+
+    # Generate noise of the determined amplitude
+    noise = np.random.uniform(0, amplitude, size=num_samples_to_affect)
+
+    # Apply noise to the chosen segment
+    x_with_noise = np.copy(x)  # Make a copy of x to prevent altering the original
+    x_with_noise[start_index:start_index + num_samples_to_affect] += noise
+    
+    r[src_or_tgt] = x_with_noise
     return r
 
 @single_batch_entry
