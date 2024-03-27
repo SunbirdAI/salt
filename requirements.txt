@@ -8,3 +8,4 @@ clean-text
 evaluate
 sacrebleu
 soundfile>=0.12.1
+jiwer
