@@ -107,7 +107,9 @@ def augment_audio_noise(r,
     '''Add random noise to an audio sample.
     
     Args:
-        x: list or np.Array containing audio.
+        r: dictionary containing fields of a single dataset row.
+        src_or_tgt: str, key such that r[src_or_tgt] contains the audio array
+            to be augmented.
         max_relative_amplitude: max noise amplitude relative to the largest
             value in the source array x. The value chosen is uniform in the
             range (0, max_amplitude_relative).
@@ -149,7 +151,9 @@ def augment_audio_time_masking(r,
     """Apply time masking to an audio signal, with cutouts of random duration.
 
     Args:
-        r: row of the dataset to be augmented.
+        r: dictionary containing fields of a single dataset row.
+        src_or_tgt: str, key such that r[src_or_tgt] contains the audio array
+            to be augmented.
         num_masks_min, num_masks_max: int, the range of masked periods is
             randomly chosen in this range.
         max_mask_duration_ms: int, the maximum duration of a mask in
