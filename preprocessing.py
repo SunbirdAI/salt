@@ -170,8 +170,9 @@ def augment_audio_time_masking(r,
     
     for _ in range(num_masks):
         mask_duration = np.random.randint(0, max_mask_duration_samples + 1)  
-        t0 = np.random.randint(0, total_time_steps - mask_duration + 1)
-        audio_masked[t0:t0 + mask_duration] = 0
+        if total_time_steps > mask_duration + 1:
+            t0 = np.random.randint(0, total_time_steps - mask_duration + 1)
+            audio_masked[t0:t0 + mask_duration] = 0
 
     r[src_or_tgt] = audio_masked
     return r

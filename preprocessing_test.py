@@ -100,6 +100,18 @@ class TestPreprocessing(unittest.TestCase):
         result = preprocessing.set_sample_rate(
             self.record, 'target', rate=32_000)
         self.assertEqual(len(result['target'][0]), 6)
+    
+    def test_time_masking(self):
+        result = preprocessing.augment_audio_time_masking(
+            {'source': [np.ones(32000)],
+             'source.sample_rate': [16000]}, 'source',
+            num_masks_max=4, max_mask_duration_ms=100)
+        self.assertTrue(np.sum(result['source'][0]) < 32000)
+        self.assertTrue(np.sum(result['source'][0]) > 32000 - (16000 * .1 * 4))
+        
+        # Test no error with empty input
+        result = preprocessing.augment_audio_time_masking(
+            {'source': [[]], 'source.sample_rate': [16000]}, 'source')
         
     def test_prefix_dataset_tag(self):
         record = {
