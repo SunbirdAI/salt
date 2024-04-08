@@ -101,6 +101,11 @@ class TestPreprocessing(unittest.TestCase):
             self.record, 'target', rate=32_000)
         self.assertEqual(len(result['target'][0]), 6)
     
+    def test_audio_noise(self):        
+        # Test no error with empty input
+        result = preprocessing.augment_audio_noise(
+            {'source': [[]], 'source.sample_rate': [16000]}, 'source')
+        
     def test_time_masking(self):
         result = preprocessing.augment_audio_time_masking(
             {'source': [np.ones(32000)],
