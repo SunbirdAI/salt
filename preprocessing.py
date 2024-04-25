@@ -32,6 +32,7 @@ to each function at once. The structure of the input is then e.g.:
 '''
 
 import re
+import copy
 import string
 import random
 import cleantext
@@ -45,6 +46,17 @@ import nlpaug.augmenter.audio as naa
 from .utils import single_batch_entry
 
 
+@single_batch_entry
+def random_case(r, src_or_tgt, p_all_lower_case=0.4, p_all_upper_case=0.03):
+    '''Augment text to be all lower case or all caps.'''
+    if np.random.random() < p_all_upper_case:
+        r['source'] = r['source'].upper()
+        r['target'] = r['target'].upper()
+    # Lower case takes precedence
+    if np.random.random() < p_all_lower_case:
+        r['source'] = r['source'].lower()
+        r['target'] = r['target'].lower()
+    return r
 
 @single_batch_entry
 def prefix_dataset_tag(r, src_or_tgt, tags=None):
@@ -88,9 +100,44 @@ def clean_text(r, src_or_tgt, **clean_text_args):
         r[src_or_tgt], to_ascii=False, lower=False, **clean_text_args)
     return r
 
-def augment_characters(r, src_or_tgt, **char_augmentation_params):
-    char_augmenter = nac.RandomCharAug(**char_augmentation_params)
-    r[src_or_tgt] = char_augmenter.augment(r[src_or_tgt])
+@single_batch_entry
+def augment_characters(r, src_or_tgt, avg_character_error_rate = 0.03):
+    # Define character set for random insertions
+    chars = 'abcdefghijklmnopqrstuvwxyz'
+
+    input_string = r[src_or_tgt]
+    lam = len(input_string) * avg_character_error_rate
+    target_errors = np.random.poisson(lam=lam)
+    errors = 0
+    
+    # Create a list from the input string for easier modifications
+    str_list = list(input_string)
+    
+    while errors < target_errors:
+        # Randomly choose deletion, insertion, modification, or duplication
+        operation = random.choice(['delete', 'insert', 'modify', 'duplicate'])
+        position = random.randint(0, len(str_list) - 1)
+
+        if operation == 'delete' and len(str_list) > 1:
+            # Delete a random character
+            del str_list[position]
+            errors += 1
+        elif operation == 'insert':
+            # Insert a random character
+            str_list.insert(position, random.choice(chars))
+            errors += 1
+        elif operation == 'modify':
+            # Modify a random character
+            str_list[position] = random.choice(chars)
+            errors += 1
+        elif operation == 'duplicate' and len(str_list) >= 2:
+            # Duplicate a random character
+            str_list.insert(position, str_list[position])
+            errors += 1
+
+    # Join the list back into a string and return
+    modified_string = ''.join(str_list)
+    r[src_or_tgt] = modified_string    
     return r
 
 def augment_words(r, src_or_tgt, **word_augmentation_params):
@@ -125,6 +172,10 @@ def augment_audio_noise(r,
     x = r[src_or_tgt]
     if not isinstance(x, np.ndarray):
         x = np.array(x)
+        
+    # Do nothing for empty inputs
+    if not len(x):
+        return r
 
     x_max = np.amax(np.abs(x))
     amplitude = np.random.uniform(0, max_relative_amplitude) * x_max
@@ -194,13 +245,6 @@ def clean_and_remove_punctuation(
 @single_batch_entry
 def lower_case(r, src_or_tgt):
     r[src_or_tgt] = r[src_or_tgt].lower()
-    return r
-
-@single_batch_entry
-def random_capitalise_source_and_target(r, src_or_tgt, p=0.005):
-    if np.random.random() < p:
-        r['source'] = r['source'].upper()
-        r['target'] = r['target'].upper()
     return r
 
 @single_batch_entry

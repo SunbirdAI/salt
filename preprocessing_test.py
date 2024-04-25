@@ -45,22 +45,19 @@ class TestPreprocessing(unittest.TestCase):
         result = preprocessing.clean_text(record, 'source')
         self.assertEqual(result['source'], expected)
 
-    def test_capitalise_source_and_target(self):
-        record = {'source': ['some words'], 'target': ['translated']}
-        result = preprocessing.random_capitalise_source_and_target(
-            record, 'source', p=1.0)
+    def test_random_case(self):
+        record = {'source': ['Some words'], 'target': ['translated']}
+        result = preprocessing.random_case(
+            record, 'source', p_all_lower_case=0.0, p_all_upper_case=1.0)
         self.assertEqual(result['source'], ['SOME WORDS'])
         self.assertEqual(result['target'], ['TRANSLATED'])
         
     def test_augment_characters(self):
-        record = {'source': ['source text']}
-        char_augmentation_params = {'action': 'swap'}
+        record = {'source': ['This is some sample source text']}
         result = preprocessing.augment_characters(
-            record, 'source', **char_augmentation_params)
+            record, 'source', avg_character_error_rate = 0.5)
         # Check that augmentation occurred
-        self.assertNotEqual(['source text'], record['source'])
-        # Character swap, so length should be unchanged
-        self.assertEqual(len('source text'), len(record['source'][0]))
+        self.assertNotEqual(result['source'], record['source'])
 
     def test_augment_words(self):
         # Real usage of RandomWordAug
@@ -83,7 +80,6 @@ class TestPreprocessing(unittest.TestCase):
             record, 'source', allowed_punctuation="'")
         self.assertEqual(result['source'], expected)
         
-
     def test_lower_case(self):
         record = {'source': ['HELLO, WoRld.']}
         expected = ['hello, world.']
@@ -101,7 +97,7 @@ class TestPreprocessing(unittest.TestCase):
             self.record, 'target', rate=32_000)
         self.assertEqual(len(result['target'][0]), 6)
     
-    def test_audio_noise(self):        
+    def test_audio_noise_on_empty_input(self):        
         # Test no error with empty input
         result = preprocessing.augment_audio_noise(
             {'source': [[]], 'source.sample_rate': [16000]}, 'source')
