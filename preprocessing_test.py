@@ -114,6 +114,20 @@ class TestPreprocessing(unittest.TestCase):
         result = preprocessing.augment_audio_time_masking(
             {'source': [[]], 'source.sample_rate': [16000]}, 'source')
         
+    def test_speed_augmentation(self):
+        # Test augmentation changes the length of data
+        r = {'source': [np.ones(32000)], 'source.sample_rate': [16000]}
+        result = preprocessing.augment_audio_speed(
+            r, 'source', low=0.8, high=0.9)
+        # Slow-down should result in longer audio array
+        self.assertTrue(len(result['source'][0] > 32000))
+
+        # Test no error with empty input
+        r = {'source': [np.array([])], 'source.sample_rate': [16000]}
+        result = preprocessing.augment_audio_speed(
+            r, 'source', p=1.0, low=0.8, high=1.2)
+        self.assertEqual(len(result['source'][0]), 0)
+        
     def test_prefix_dataset_tag(self):
         record = {
             'source': ['test 1', 'test 2', 'test 3'],
