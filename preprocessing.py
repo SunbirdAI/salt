@@ -146,6 +146,36 @@ def augment_words(r, src_or_tgt, **word_augmentation_params):
     return r
 
 @single_batch_entry
+def augment_audio_speed(r, src_or_tgt, p=0.5, low=0.95, high=1.25):
+    '''Change the speed of an audio sample randomly.
+    
+    Args:
+        r: dictionary containing fields of a single dataset row.
+        src_or_tgt: str, key such that r[src_or_tgt] contains the audio array
+            to be augmented.
+        p: float, probability that the augmentation is applied, in range (0,1)
+        low: float, lower limit for speed change. Default is 0.9 (i.e., slow
+            down the speed).
+        high: float, upper limit for speed change. Default is 1.5 (i.e.,
+            increase the speed).
+    '''
+    x = r[src_or_tgt]
+    if not isinstance(x, np.ndarray):
+        x = np.array(x)
+        
+    # Do nothing for empty inputs
+    if not len(x):
+        return r
+    
+    if np.random.random() < p:
+        speed_factor = np.random.uniform(low=low, high=high)
+        x_with_speed_change = librosa.effects.time_stretch(x, rate=speed_factor)
+        r[src_or_tgt] = x_with_speed_change
+        
+    return r
+    
+    
+@single_batch_entry
 def augment_audio_noise(r, 
                         src_or_tgt,
                         max_relative_amplitude = .5,
@@ -168,7 +198,6 @@ def augment_audio_noise(r,
             in the range (min_coverage, max_coverage), and a segment of this
             length is randomly selected from the sample.
     '''
-    
     x = r[src_or_tgt]
     if not isinstance(x, np.ndarray):
         x = np.array(x)

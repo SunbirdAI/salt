@@ -171,14 +171,20 @@ def _load_huggingface_datasets(config):
         
     return loaded_datasets
 
-def _matching_items(row, source_target_config):
+def _matching_items(row, source_target_config, source_or_target):
     """Find which items in a row match the config."""
     matches = []
     speaker_id_filter = source_target_config.get('speaker_id')
     # TODO: filter based on recording type (natural/studio/any)
-    for language in _ensure_list(source_target_config['language']):
+    for language in _ensure_list(source_target_config['language']):  
         if source_target_config['type'] == 'text':
-            if row.get(f'{language}_text'):
+            if source_or_target == 'target' and row.get(f'{language}_target_text'):
+                matches.append(
+                    {'text': row[f'{language}_target_text'],
+                     'language': language,
+                     'origin_dataset': row['origin_dataset'],
+                    })
+            elif row.get(f'{language}_text'):
                 matches.append(
                     {'text': row[f'{language}_text'],
                      'language': language,
@@ -216,11 +222,12 @@ def _matching_items(row, source_target_config):
             )
     return matches
 
+    
 def _matching_pairs(row, config):
     """Find all source/target pairs that match the configuration."""
     
-    source_items = _matching_items(row, config['source'])
-    target_items = _matching_items(row, config['target'])
+    source_items = _matching_items(row, config['source'], 'source')
+    target_items = _matching_items(row, config['target'], 'target')
     
     for source in source_items:
         for target in target_items:
@@ -237,7 +244,10 @@ def _matching_pairs(row, config):
                 else:
                     example['target'] = v
                     
-            if (example['source.language'] == example['target.language'] and
+            matching_src_tgt_languages = (
+                example['source.language'] == example['target.language'])
+                    
+            if (matching_src_tgt_languages and
                 not config.get('allow_same_src_and_tgt_language', True)):
                 continue
             
