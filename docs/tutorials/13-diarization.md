@@ -133,7 +133,7 @@ pipe = AutomaticSpeechRecognitionPipeline(
 **Performing a transcription**
 
 ```python
- transcription = pipe("/content/kitakas_eng.mp3")
+ transcription = pipe("/content/Kibuuka_eng.mp3")
 ```
 
  The resulting dictionary `transcription` will contain a `text` key containing all the transcribed text as well as a `chunks` containing individual texts along with their time stamps of the format below:
@@ -290,7 +290,7 @@ def assign_word_speakers(diarize_df, transcript_result, fill_nearest=False):
 **Running the diarization model**
 ```python
 diarize_model = DiarizationPipeline(use_auth_token=hf_token, device=device)
-diarize_segments = diarize_model("/content/kitakas_eng.mp3", min_speakers=1, max_speakers=2)
+diarize_segments = diarize_model("/content/Kibuuka_eng.mp3", min_speakers=1, max_speakers=2)
 
 diarize_segments
 ```
