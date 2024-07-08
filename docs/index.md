@@ -28,6 +28,8 @@ This documentation serves as the official guide for the **Leb** project, which i
     - [Leb Pipelines](#leb-pipelines)
         - [Data Loading](tutorials/11-data-loading.md)
         - [Training](tutorials/12-training.md)
+    - [Speaker Diarization](#diarization)
+        - [Diarization](tutorials/13-diarization.md)
 - [Reference Docs](#reference)
     - [Reference](reference.md)
 

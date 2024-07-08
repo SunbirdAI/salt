@@ -25,6 +25,8 @@ nav:
       - 'Leb Pipelines':
           - 'Data Loading': tutorials/11-data-loading.md
           - 'Training': tutorials/12-training.md
+      - 'Speaker Diarization':
+          - "Diarization": tutorials/13-diarization.md
   - 'Reference':
       - 'Reference': reference.md
 
