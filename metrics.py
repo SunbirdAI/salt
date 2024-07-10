@@ -50,14 +50,19 @@ def multilingual_eval(eval_preds,
             return f
 
     if speech_processor:
-        pred_logits = eval_preds.predictions
-        pred_ids = np.argmax(pred_logits, axis=-1)
+        if len(eval_preds.predictions.shape) == 2:
+            # Predictions are token IDs
+            pred_ids = eval_preds.predictions    
+        else:
+            # Predictions are logits
+            pred_logits = eval_preds.predictions
+            pred_ids = np.argmax(pred_logits, axis=-1)
         eval_preds.label_ids[eval_preds.label_ids == -
                              100] = speech_processor.tokenizer.pad_token_id
-        decoded_predictions = speech_processor.batch_decode(pred_ids)
+        decoded_predictions = speech_processor.batch_decode(pred_ids, skip_special_tokens=True)
         # we do not want to group tokens when computing the metrics
         decoded_labels = speech_processor.batch_decode(
-            eval_preds.label_ids, group_tokens=False)
+            eval_preds.label_ids, skip_special_tokens=True)
     else:
         predictions, labels = eval_preds
         # Replace -100 values as we can't decode them.
