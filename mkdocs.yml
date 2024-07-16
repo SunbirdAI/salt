@@ -27,6 +27,7 @@ nav:
           - 'Training': tutorials/12-training.md
       - 'Speaker Diarization':
           - "Diarization": tutorials/13-diarization.md
+          - "Fine-Tuning Diarization": tutorials/14-diarization-training.md
   - 'Reference':
       - 'Reference': reference.md
 

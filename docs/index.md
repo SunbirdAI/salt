@@ -30,6 +30,7 @@ This documentation serves as the official guide for the **Leb** project, which i
         - [Training](tutorials/12-training.md)
     - [Speaker Diarization](#diarization)
         - [Diarization](tutorials/13-diarization.md)
+        - [Fine-Tuning](tutorials/14-diarization-training.md)
 - [Reference Docs](#reference)
     - [Reference](reference.md)
 
