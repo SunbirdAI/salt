@@ -52,6 +52,13 @@ def _flatten_audio_type_to_array(sample):
     sample['sample_rate'] = sample_rate
     return sample
 
+def _add_speaker_id_studio_if_not_present(sample):
+    if 'speaker_id' not in sample:
+        sample['speaker_id'] = 0
+    if 'is_studio' not in sample:
+        sample['is_studio'] = False
+    return sample
+
 def _load_single_huggingface_dataset(load_dataset_params):
     ds = datasets.load_dataset(**load_dataset_params)
     if isinstance(ds, datasets.DatasetDict):
@@ -74,12 +81,7 @@ def _load_single_huggingface_dataset(load_dataset_params):
     for from_name, to_name in remap_names.items():
         if from_name in ds.features and not to_name in ds.features:
             ds = ds.rename_column(from_name, to_name)
-
-    if 'audio' in ds.features:
-        if isinstance(ds.features['audio'], datasets.features.audio.Audio):
-            # Remap from Audio object to flat array
-            ds = ds.map(_flatten_audio_type_to_array)
-            
+      
     # If this is a Common Voice dataset, then remap it to SALT format.
     if load_dataset_params['path'] == 'mozilla-foundation/common_voice_13_0':
         if load_dataset_params['name'] == 'lg':
@@ -91,6 +93,13 @@ def _load_single_huggingface_dataset(load_dataset_params):
                f'{load_dataset_params["name"]} to a SALT language code.')
         ds.set_transform(
             lambda x: _common_voice_to_SALT(x, language))
+
+    if 'audio' in ds.features:
+        if isinstance(ds.features['audio'], datasets.features.audio.Audio):
+            # Remap from Audio object to flat array
+            ds = ds.map(_flatten_audio_type_to_array)
+        if 'speaker_id' not in ds.features or 'is_studio' not in ds.features:
+            ds = ds.map(_add_speaker_id_studio_if_not_present)
                   
     return ds
 
