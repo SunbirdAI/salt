@@ -45,7 +45,7 @@ def _common_voice_to_SALT(batch, language):
 def _google_fleurs_to_SALT(batch, language):
     '''Remap a Google FLEURS format batch to SALT format.'''
     # Process the whole batch at once
-    batch_size = len(batch['sentence'])
+    batch_size = len(batch['transcription'])
     # Transform data
     batch['id'] = [-1] * batch_size # TODO: create sequential IDs
     batch['sample_rate'] = [example['sampling_rate'] for example in batch['audio']]
