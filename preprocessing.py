@@ -277,15 +277,16 @@ def lower_case(r, src_or_tgt):
     return r
 
 @single_batch_entry
-def set_sample_rate(r, src_or_tgt, rate):
+def set_sample_rate(r, src_or_tgt, rate, p=1.0):
     '''Resamples audio data, if the sample rate in the record is different.'''
     current_sample_rate = r[f'{src_or_tgt}.sample_rate']
     if current_sample_rate != rate:
-        audio_data = np.array(r[src_or_tgt])
-        resampled_audio_data = librosa.resample(
-            audio_data, orig_sr=current_sample_rate, target_sr=rate)
-        r[src_or_tgt] = resampled_audio_data
-        r[f'{src_or_tgt}.sample_rate'] = rate
+        if p == 1.0 or np.random.random() < p:
+            audio_data = np.array(r[src_or_tgt])
+            resampled_audio_data = librosa.resample(
+                audio_data, orig_sr=current_sample_rate, target_sr=rate)
+            r[src_or_tgt] = resampled_audio_data
+            r[f'{src_or_tgt}.sample_rate'] = rate
     
     return r
 
