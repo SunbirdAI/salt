@@ -43,6 +43,15 @@ def _common_voice_to_SALT(batch, language):
     batch['is_studio'] = [False] * batch_size
     return batch
 
+
+def _flatten_audio_type_to_array(sample):
+    # Convert datasets.features.audio.Audio to a flat array
+    audio_array = sample['audio']['array']
+    sample_rate = sample['audio']['sampling_rate']
+    sample['audio'] = audio_array
+    sample['sample_rate'] = sample_rate
+    return sample
+
 def _load_single_huggingface_dataset(load_dataset_params):
     ds = datasets.load_dataset(**load_dataset_params)
     if isinstance(ds, datasets.DatasetDict):
@@ -65,6 +74,11 @@ def _load_single_huggingface_dataset(load_dataset_params):
     for from_name, to_name in remap_names.items():
         if from_name in ds.features and not to_name in ds.features:
             ds = ds.rename_column(from_name, to_name)
+
+    if 'audio' in ds.features:
+        if isinstance(ds.features['audio'], datasets.features.audio.Audio):
+            # Remap from Audio object to flat array
+            ds = ds.map(_flatten_audio_type_to_array)
             
     # If this is a Common Voice dataset, then remap it to SALT format.
     if load_dataset_params['path'] == 'mozilla-foundation/common_voice_13_0':
