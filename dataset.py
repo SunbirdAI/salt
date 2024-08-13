@@ -30,7 +30,6 @@ def _ensure_list(x):
 
 def _common_voice_to_SALT(batch, language):
     '''Remap a Common Voice format batch to SALT format.'''
-    
     # Process the whole batch at once
     batch_size = len(batch['sentence'])
     # Transform data
@@ -43,6 +42,19 @@ def _common_voice_to_SALT(batch, language):
     batch['is_studio'] = [False] * batch_size
     return batch
 
+def _google_fleurs_to_SALT(batch, language):
+    '''Remap a Google FLEURS format batch to SALT format.'''
+    # Process the whole batch at once
+    batch_size = len(batch['sentence'])
+    # Transform data
+    batch['id'] = [-1] * batch_size # TODO: create sequential IDs
+    batch['sample_rate'] = [example['sampling_rate'] for example in batch['audio']]
+    batch['audio'] = [example['array'] for example in batch['audio']]
+    batch['text'] = batch['raw_transcription']
+    batch['language'] = [language] * batch_size
+    batch['speaker_id'] = [0] * batch_size
+    batch['is_studio'] = [False] * batch_size
+    return batch    
 
 def _flatten_audio_type_to_array(sample):
     # Convert datasets.features.audio.Audio to a flat array
@@ -94,9 +106,23 @@ def _load_single_huggingface_dataset(load_dataset_params):
         ds.set_transform(
             lambda x: _common_voice_to_SALT(x, language))
 
-    if 'audio' in ds.features:
+    # If this is a Google FLEURS dataset, then remap it to SALT format.
+    elif load_dataset_params['path'] == 'google/fleurs':
+        if load_dataset_params['name'] == 'lg_ug':
+            language = 'lug'
+        elif load_dataset_params['name'] == 'sw_ke':
+            language = 'swa'
+        else:
+            language = load_dataset_params['name']
+            raise Warning(
+                'Not sure how to map the FLEURS subset '
+               f'{load_dataset_params["name"]} to a SALT language code.')
+        ds.set_transform(
+            lambda x: _google_fleurs_to_SALT(x, language))
+
+    # If it's a different dataset with an Audio type, then flatten this to an array
+    elif 'audio' in ds.features:
         if isinstance(ds.features['audio'], datasets.features.audio.Audio):
-            # Remap from Audio object to flat array
             ds = ds.map(_flatten_audio_type_to_array)
         if 'speaker_id' not in ds.features or 'is_studio' not in ds.features:
             ds = ds.map(_add_speaker_id_studio_if_not_present)
