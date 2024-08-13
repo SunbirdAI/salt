@@ -163,10 +163,55 @@ class DatasetTestCase(unittest.TestCase):
                 'eng-002',
             ]   
         }
-        
-        
-        
 
+        audio_object_metadata = {
+            'id': [1, 1, 1, 1, 2, 2, 2, 3,],
+            'audio': [
+                f'{audio_path}/lug1.wav',
+                f'{audio_path}/lug1_studio.wav',
+                f'{audio_path}/eng1.wav',
+                f'{audio_path}/ach1.wav',
+                f'{audio_path}/lug2.wav',
+                f'{audio_path}/lug2_studio.wav',
+                f'{audio_path}/eng2.wav',
+                f'{audio_path}/eng3.wav',   
+            ],
+            'text': [
+              'lug1', 'lug1', 'eng1', 'ach1', 'lug2',  'lug2',  'eng2', 'eng3'],
+            'audio_language': [
+              'lug', 'lug', 'eng', 'ach', 'lug', 'lug', 'eng', 'eng'],
+            'is_studio': [
+              False, False, True, True, False, False, False, False],
+            'speaker_id': [
+                'lug-001',
+                'lug-studio-1',
+                'eng-001',
+                'ach-001',
+                'lug-002',
+                'lug-studio-1',
+                'eng-002',
+                'eng-001',
+            ]   
+        }
+
+        audio_object_metadata_no_speaker_id = {
+            'id': [1, 1, 1, 1, 2, 2, 2, 3,],
+            'audio': [
+                f'{audio_path}/lug1.wav',
+                f'{audio_path}/lug1_studio.wav',
+                f'{audio_path}/eng1.wav',
+                f'{audio_path}/ach1.wav',
+                f'{audio_path}/lug2.wav',
+                f'{audio_path}/lug2_studio.wav',
+                f'{audio_path}/eng2.wav',
+                f'{audio_path}/eng3.wav',   
+            ],
+            'text': [
+              'lug1', 'lug1', 'eng1', 'ach1', 'lug2',  'lug2',  'eng2', 'eng3'],
+            'audio_language': [
+              'lug', 'lug', 'eng', 'ach', 'lug', 'lug', 'eng', 'eng'],
+        }
+        
         temp_csv_path = f'{self.data_path}/translation_dataset_1.csv'
         pd.DataFrame(translate_data_1).to_csv(temp_csv_path, index=False)    
 
@@ -190,6 +235,16 @@ class DatasetTestCase(unittest.TestCase):
             audio_metadata_unsorted)
         audio_dataset_unsorted.to_parquet(
             f'{self.data_path}/audio_mock_unsorted.parquet')
+
+        audio_object_dataset = datasets.Dataset.from_dict(audio_object_metadata).cast_column(
+          'audio', datasets.Audio(sampling_rate=16000))
+        audio_object_dataset.to_parquet(f'{self.data_path}/audio_object_mock.parquet')
+
+        audio_object_no_speaker_id_dataset = datasets.Dataset.from_dict(
+          audio_object_metadata_no_speaker_id).cast_column(
+            'audio', datasets.Audio(sampling_rate=16000))
+        audio_object_no_speaker_id_dataset.to_parquet(
+          f'{self.data_path}/audio_object_no_speaker_id_mock.parquet')
 
         datasets.disable_progress_bar()
         # HuggingFace datasets gives a ResourceWarning with temp files
@@ -688,6 +743,61 @@ class DatasetTestCase(unittest.TestCase):
 
       self.assertNestedAlmostEqual(list(ds), expected)
         
+
+    def test_audio_object_dataset(self):
+      yaml_config = '''
+      huggingface_load:
+          path: parquet
+          data_files: PATH/audio_object_mock.parquet
+          split: train
+      source:
+          type: speech
+          language: ach
+      target:
+          type: text
+          language: ach
+      '''.replace('PATH', self.data_path)
+      config = yaml.safe_load(yaml_config)
+      ds = dataset.create(config)
+      
+      expected = [
+        {'source': np.array([.8, .8, .8]),
+         'target': 'ach1',
+         'source.language': 'ach',
+         'target.language': 'ach',        
+        },
+      ]
+
+      self.assertNestedAlmostEqual(list(ds), expected)
+
+
+    def test_audio_object_no_speaker_id_dataset(self):
+      yaml_config = '''
+      huggingface_load:
+          path: parquet
+          data_files: PATH/audio_object_no_speaker_id_mock.parquet
+          split: train
+      source:
+          type: speech
+          language: ach
+      target:
+          type: text
+          language: ach
+      '''.replace('PATH', self.data_path)
+      config = yaml.safe_load(yaml_config)
+      ds = dataset.create(config)
+      
+      expected = [
+        {'source': np.array([.8, .8, .8]),
+         'target': 'ach1',
+         'source.language': 'ach',
+         'target.language': 'ach',        
+        },
+      ]
+
+      self.assertNestedAlmostEqual(list(ds), expected)
+
+      
     def test_join_unsorted_raises_exception(self):
       def try_creating_unsorted():  
           yaml_config = '''

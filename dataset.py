@@ -30,7 +30,6 @@ def _ensure_list(x):
 
 def _common_voice_to_SALT(batch, language):
     '''Remap a Common Voice format batch to SALT format.'''
-    
     # Process the whole batch at once
     batch_size = len(batch['sentence'])
     # Transform data
@@ -42,6 +41,35 @@ def _common_voice_to_SALT(batch, language):
     batch['speaker_id'] = [0] * batch_size
     batch['is_studio'] = [False] * batch_size
     return batch
+
+def _google_fleurs_to_SALT(batch, language):
+    '''Remap a Google FLEURS format batch to SALT format.'''
+    # Process the whole batch at once
+    batch_size = len(batch['transcription'])
+    # Transform data
+    batch['id'] = [-1] * batch_size # TODO: create sequential IDs
+    batch['sample_rate'] = [example['sampling_rate'] for example in batch['audio']]
+    batch['audio'] = [example['array'] for example in batch['audio']]
+    batch['text'] = batch['raw_transcription']
+    batch['language'] = [language] * batch_size
+    batch['speaker_id'] = [0] * batch_size
+    batch['is_studio'] = [False] * batch_size
+    return batch    
+
+def _flatten_audio_type_to_array(sample):
+    # Convert datasets.features.audio.Audio to a flat array
+    audio_array = sample['audio']['array']
+    sample_rate = sample['audio']['sampling_rate']
+    sample['audio'] = audio_array
+    sample['sample_rate'] = sample_rate
+    return sample
+
+def _add_speaker_id_studio_if_not_present(sample):
+    if 'speaker_id' not in sample:
+        sample['speaker_id'] = 0
+    if 'is_studio' not in sample:
+        sample['is_studio'] = False
+    return sample
 
 def _load_single_huggingface_dataset(load_dataset_params):
     ds = datasets.load_dataset(**load_dataset_params)
@@ -65,7 +93,7 @@ def _load_single_huggingface_dataset(load_dataset_params):
     for from_name, to_name in remap_names.items():
         if from_name in ds.features and not to_name in ds.features:
             ds = ds.rename_column(from_name, to_name)
-            
+      
     # If this is a Common Voice dataset, then remap it to SALT format.
     if load_dataset_params['path'] == 'mozilla-foundation/common_voice_13_0':
         if load_dataset_params['name'] == 'lg':
@@ -77,6 +105,27 @@ def _load_single_huggingface_dataset(load_dataset_params):
                f'{load_dataset_params["name"]} to a SALT language code.')
         ds.set_transform(
             lambda x: _common_voice_to_SALT(x, language))
+
+    # If this is a Google FLEURS dataset, then remap it to SALT format.
+    elif load_dataset_params['path'] == 'google/fleurs':
+        if load_dataset_params['name'] == 'lg_ug':
+            language = 'lug'
+        elif load_dataset_params['name'] == 'sw_ke':
+            language = 'swa'
+        else:
+            language = load_dataset_params['name']
+            raise Warning(
+                'Not sure how to map the FLEURS subset '
+               f'{load_dataset_params["name"]} to a SALT language code.')
+        ds.set_transform(
+            lambda x: _google_fleurs_to_SALT(x, language))
+
+    # If it's a different dataset with an Audio type, then flatten this to an array
+    elif 'audio' in ds.features:
+        if isinstance(ds.features['audio'], datasets.features.audio.Audio):
+            ds = ds.map(_flatten_audio_type_to_array)
+        if 'speaker_id' not in ds.features or 'is_studio' not in ds.features:
+            ds = ds.map(_add_speaker_id_studio_if_not_present)
                   
     return ds
 
