@@ -28,6 +28,7 @@ nav:
       - 'Speaker Diarization':
           - "Diarization": tutorials/13-diarization.md
           - "Fine-Tuning Diarization": tutorials/14-diarization-training.md
+          - "Using Finetuned Model": tutorials/15-Loading-finetuned-diarization.md
   - 'Reference':
       - 'Reference': reference.md
 
