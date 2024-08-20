@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Evaluating the Fine-Tuned Model - Leb Documentation</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../../assets/_mkdocstrings.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Evaluating the Fine-Tuned Model";
+        var mkdocs_page_input_path = "tutorials/15-diarization-evaluation.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> Leb Documentation
+        </a>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../..">💬 LEB</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Getting Started</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../01-introduction/">Introduction</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../02-installation/">Installation</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../03-quick-tour/">Quick Tour</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Tutorials</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" >Beginner</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../04-basics/">Basics</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../05-data-exploration/">Data Exploration</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >Leb Datasets</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../06-text-datasets/">Text Datasets</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../07-speech-datasets/">Speech Datasets</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >Leb Models</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../08-translation-models/">Translation Models</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../09-asr-models/">ASR Models</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../10-tts-models/">TTS Models</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >Leb Pipelines</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../11-data-loading/">Data Loading</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../12-training/">Training</a>
+                </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" >Speaker Diarization</a>
+    <ul>
+                <li class="toctree-l2"><a class="reference internal" href="../13-diarization/">Diarization</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../14-diarization-training/">Fine-Tuning Diarization</a>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Reference</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../reference/">Reference</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">Leb Documentation</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Evaluating the Fine-Tuned Model</li>
+    <li class="wy-breadcrumbs-aside">
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="evaluating-the-fine-tuned-model">Evaluating the Fine-Tuned Model</h1>
+<p>The script <code>test_segmentation.py</code> can be used to evaluate a fine-tuned model on a diarization dataset.</p>
+<p>In the following example, we evaluate the fine-tuned model from the test split of the CallHome English Dataset.</p>
+<pre><code class="language-bash">python3 test_segmentation.py \
+    --dataset_name=diarizers-community/callhome \
+    --dataset_config_name=eng \
+    --split_on_subset=data \
+    --test_split_name=test \
+    --model_name_or_path=diarizers-community/speaker-segmentation-fine-tuned-callhome-eng \
+    --preprocessing_num_workers=2 \
+    --evaluate_with_pipeline \
+</code></pre>
+<h4 id="sample-output">Sample Output</h4>
+<p><img alt="alt text" src="../EVAL.PNG" /></p>
+<p>The output above is the default output that can be obtained using the default Evaluation Script.</p>
+<p>This documentation further explores the evaluation process adding more to the metrics that can be measured during this process and highlighting the editing.</p>
+<p>Considering there are many metrics that can be obtained throughout the diarization process as documented in the <a href="https://pyannote.github.io/pyannote-metrics/reference.html"><code>pyannote.audio.metrics</code> documentation</a>.</p>
+<p><img alt="alt text" src="../image-1.png" /></p>
+<p>In this documentation, we'll focus on the Segmentation Precision, Segmentation Recall and Identification F1 Score.</p>
+<h4 id="segmentation-precision-and-recall">Segmentation Precision and Recall</h4>
+<p><strong>Imports</strong></p>
+<p><code>Segment</code>: Speaker segmentation is the process of dividing an audio recording into segments based on the changing speakers’ identities. The goal of speaker segmentation is to determine the time boundaries where the speaker changes occur, effectively identifying the points at which one speaker’s speech ends, and another’s begins. That said, a <code>Segment</code> is a data structure with <code>start</code> and <code>end</code> time that will then be placed in a <code>Timeline</code></p>
+<p><code>Timeline</code>: A data structure containing various segments. Reference timelines are provided in the ground truth and are compared against the predicted timelines to calculate <code>segmentation precision</code> and <code>segmentation recall</code></p>
+<pre><code class="language-python">from pyannote.core import SlidingWindow, SlidingWindowFeature, Timeline, Segment
+from pyannote.metrics import segmentation, identification
+</code></pre>
+<h3 id="testing-the-segmentation-model"><strong>Testing the Segmentation Model</strong></h3>
+<p><strong>Initialization</strong></p>
+<p><code>class Test</code> : The Segmentation Model test implementation is carried out within the Test Class found in the <code>Test.py</code> file in <code>src/diarizers</code></p>
+<p><strong>Parameters</strong></p>
+<p><code>test_dataset</code>: The test dataset to be used. In this example, it will be the test split on the Callhome English dataset.</p>
+<p><code>model (SegmentationModel)</code>: The model is the finetuned model trained by the <code>train_segmentation.py</code> script.</p>
+<p><code>step (float, optional)</code>: Steps between successive generated audio chunks. Defaults to 2.5.</p>
+<p><code>metrics</code>: For this example, the metrics <code>segmentation_precision</code>,<code>segmentation_recall</code>,<code>recall_value</code>,<code>precision_value</code> and <code>count</code> have been added for the purpose of calculating the segmentation recall and precision of the Segmentation Model.</p>
+<pre><code class="language-python">class Test:
+
+    def __init__(self, test_dataset, model, step=2.5):
+
+        self.test_dataset = test_dataset
+        self.model = model
+        (self.device,) = get_devices(needs=1)
+        self.inference = Inference(self.model, step=step, device=self.device)
+
+        self.sample_rate = test_dataset[0][&quot;audio&quot;][&quot;sampling_rate&quot;]
+
+        # Get the number of frames associated to a chunk:
+        _, self.num_frames, _ = self.inference.model(
+            torch.rand((1, int(self.inference.duration * self.sample_rate))).to(self.device)
+        ).shape
+        # compute frame resolution:
+        self.resolution = self.inference.duration / self.num_frames
+
+        self.metrics = {
+            &quot;der&quot;: DiarizationErrorRate(0.5).to(self.device),
+            &quot;confusion&quot;: SpeakerConfusionRate(0.5).to(self.device),
+            &quot;missed_detection&quot;: MissedDetectionRate(0.5).to(self.device),
+            &quot;false_alarm&quot;: FalseAlarmRate(0.5).to(self.device),
+            &quot;segmentation_precision&quot;: segmentation.SegmentationPrecision(),
+            &quot;segmentation_recall&quot;: segmentation.SegmentationRecall(),
+            &quot;recall_value&quot;:0,
+            &quot;precision_value&quot;: 0,
+            &quot;count&quot;: 0,
+        }
+
+</code></pre>
+<p><strong>Predict function</strong></p>
+<p>This function makes a prediction on a dataset row using pyannote inference object.</p>
+<pre><code class="language-python">    def predict(self, file):
+        audio = torch.tensor(file[&quot;audio&quot;][&quot;array&quot;]).unsqueeze(0).to(torch.float32).to(self.device)
+        sample_rate = file[&quot;audio&quot;][&quot;sampling_rate&quot;]
+
+        input = {&quot;waveform&quot;: audio, &quot;sample_rate&quot;: sample_rate}
+
+        prediction = self.inference(input)
+
+        return prediction
+</code></pre>
+<p><strong>Compute Ground Truth Function</strong></p>
+<p>This function converts a dataset row into the suitable format for evaluation as the ground truth.</p>
+<p><code>Returns</code>: numpy array with shape (num_frames, num_speakers).</p>
+<pre><code class="language-python">def compute_gt(self, file):
+
+    audio = torch.tensor(file[&quot;audio&quot;][&quot;array&quot;]).unsqueeze(0).to(torch.float32)
+    sample_rate = file[&quot;audio&quot;][&quot;sampling_rate&quot;]
+
+    audio_duration = len(audio[0]) / sample_rate
+    num_frames = int(round(audio_duration / self.resolution))
+
+    labels = list(set(file[&quot;speakers&quot;]))
+
+    gt = np.zeros((num_frames, len(labels)), dtype=np.uint8)
+
+    for i in range(len(file[&quot;timestamps_start&quot;])):
+        start = file[&quot;timestamps_start&quot;][i]
+        end = file[&quot;timestamps_end&quot;][i]
+        speaker = file[&quot;speakers&quot;][i]
+        start_frame = int(round(start / self.resolution))
+        end_frame = int(round(end / self.resolution))
+        speaker_index = labels.index(speaker)
+
+        gt[start_frame:end_frame, speaker_index] += 1
+
+    return gt
+</code></pre>
+<p><strong>Convert to Timeline</strong></p>
+<p>This function creates a <code>Timeline</code> using data and labels passed as parameters and converted into <code>Segments</code>. Required in order to calculate Segmentation Precision and Recall.</p>
+<pre><code class="language-python">    def convert_to_timeline(self, data, labels):
+        timeline = Timeline()
+        for speaker_index, label in enumerate(labels):
+            segments = np.where(data[:, speaker_index] == 1)[0]
+            if len(segments) &gt; 0:
+                start = segments[0] * self.resolution
+                end = segments[0] * self.resolution
+                for frame in segments[1:]:
+                    if frame == end / self.resolution + 1:
+                        end += self.resolution
+                    else:
+                        timeline.add(Segment(start, end + self.resolution))
+                        start = frame * self.resolution
+                        end = frame * self.resolution
+                timeline.add(Segment(start, end + self.resolution))
+        return timeline
+</code></pre>
+<p><strong>Compute Metrics on File</strong></p>
+<p>Function that computes metrics for a dataset row passed into it. This function is run iteratively until the entire dataset has been processed.</p>
+<pre><code class="language-python">    def compute_metrics_on_file(self, file):
+        gt = self.compute_gt(file)
+        prediction = self.predict(file)
+
+        sliding_window = SlidingWindow(start=0, step=self.resolution, duration=self.resolution)
+        labels = list(set(file[&quot;speakers&quot;]))
+
+        reference = SlidingWindowFeature(data=gt, labels=labels, sliding_window=sliding_window)
+
+        # Convert to Timeline for SegmentationPrecision
+        reference_timeline = self.convert_to_timeline(gt, labels)
+        prediction_timeline = self.convert_to_timeline(prediction.data, labels)
+
+
+        for window, pred in prediction:
+            reference_window = reference.crop(window, mode=&quot;center&quot;)
+            common_num_frames = min(self.num_frames, reference_window.shape[0])
+
+            _, ref_num_speakers = reference_window.shape
+            _, pred_num_speakers = pred.shape
+
+            if pred_num_speakers &gt; ref_num_speakers:
+                reference_window = np.pad(reference_window, ((0, 0), (0, pred_num_speakers - ref_num_speakers)))
+            elif ref_num_speakers &gt; pred_num_speakers:
+                pred = np.pad(pred, ((0, 0), (0, ref_num_speakers - pred_num_speakers)))
+
+            pred = torch.tensor(pred[:common_num_frames]).unsqueeze(0).permute(0, 2, 1).to(self.device)
+            target = (torch.tensor(reference_window[:common_num_frames]).unsqueeze(0).permute(0, 2, 1)).to(self.device)
+
+            self.metrics[&quot;der&quot;](pred, target)
+            self.metrics[&quot;false_alarm&quot;](pred, target)
+            self.metrics[&quot;missed_detection&quot;](pred, target)
+            self.metrics[&quot;confusion&quot;](pred, target)
+
+
+        # Compute precision
+        self.metrics[&quot;precision_value&quot;] += self.metrics[&quot;segmentation_precision&quot;](reference_timeline, prediction_timeline)
+        self.metrics[&quot;recall_value&quot;] += self.metrics[&quot;segmentation_recall&quot;](reference_timeline, prediction_timeline)
+        self.metrics[&quot;count&quot;] += 1
+</code></pre>
+<p><strong>Compute Metrics</strong></p>
+<p>Using all the functions above, the metrics for the Segmentation Model can then be computed and returned at once as shown below.</p>
+<p>Further information on metrics that extracted from the Segmentation model can be found <a href="https://pyannote.github.io/pyannote-metrics/reference.html#segmentation">here</a></p>
+<pre><code class="language-python">    def compute_metrics(self):
+        &quot;&quot;&quot;Main method, used to compute speaker diarization metrics on test_dataset.
+        Returns:
+            dict: metric values.
+        &quot;&quot;&quot;
+
+        for file in tqdm(self.test_dataset):
+            self.compute_metrics_on_file(file)
+        if self.metrics[&quot;count&quot;] != 0:
+            self.metrics[&quot;precision_value&quot;] /= self.metrics[&quot;count&quot;]
+            self.metrics[&quot;recall_value&quot;] /= self.metrics[&quot;count&quot;]
+
+        return {
+            &quot;der&quot;: self.metrics[&quot;der&quot;].compute(),
+            &quot;false_alarm&quot;: self.metrics[&quot;false_alarm&quot;].compute(),
+            &quot;missed_detection&quot;: self.metrics[&quot;missed_detection&quot;].compute(),
+            &quot;confusion&quot;: self.metrics[&quot;confusion&quot;].compute(),
+            &quot;segmentation_precision&quot;: self.metrics[&quot;precision_value&quot;],
+            &quot;segmentation_recall&quot;: self.metrics[&quot;recall_value&quot;],
+        }
+</code></pre>
+<h3 id="testing-the-speaker-diarization-with-the-fine-tuned-segmentation-model">Testing the Speaker Diarization (With the Fine-tuned Segmentation Model)</h3>
+<p>The Fine-tuned segmentation model can be run in the Speaker Diarization Pipeline by calling <code>from_pretrained</code> and overwriting the segmentation model with the fine-tuned model. Code can be found in the <code>Test.py</code> script.</p>
+<pre><code class="language-python">pipeline = Pipeline.from_pretrained(&quot;pyannote/speaker-diarization-3.1&quot;)
+        pipeline._segmentation.model = model
+</code></pre>
+<p><strong>Initialization</strong></p>
+<p>The class <code>TestPipeline</code> will be implementing and testing the Speaker Diarization Pipeline with the finetuned segmentation model.</p>
+<p><strong>Parameters</strong></p>
+<p><code>pipeline</code>: Speaker Diarization pipeline</p>
+<p><code>test_dataset</code>: Data to be tested. In this example, it is data from the Callhome English dataset.</p>
+<p><code>metrics</code>: Since <code>pyannote.metrics</code> does not offer Identification F1-score, we'll use the Precision and Recall to calculate the <code>identificationF1Score</code></p>
+<pre><code class="language-python">class TestPipeline:
+    def __init__(self, test_dataset, pipeline) -&gt; None:
+
+        self.test_dataset = test_dataset
+
+        (self.device,) = get_devices(needs=1)
+        self.pipeline = pipeline.to(self.device)
+        self.sample_rate = test_dataset[0][&quot;audio&quot;][&quot;sampling_rate&quot;]
+
+        # Get the number of frames associated to a chunk:
+        _, self.num_frames, _ = self.pipeline._segmentation.model(
+            torch.rand((1, int(self.pipeline._segmentation.duration * self.sample_rate))).to(self.device)
+        ).shape
+        # compute frame resolution:
+        self.resolution = self.pipeline._segmentation.duration / self.num_frames
+
+        self.metrics = {
+            &quot;der&quot;: diarization.DiarizationErrorRate(),
+            &quot;identification_precision&quot;: identification.IdentificationPrecision(),
+            &quot;identification_recall&quot;: identification.IdentificationRecall(),
+            &quot;identification_f1&quot;: 0,
+
+        }
+</code></pre>
+<p><strong>Compute Ground Truth</strong></p>
+<p>Function that reformats the Dataset Row to return the ground truth to be used for evaluation.</p>
+<p><strong>Parameters</strong></p>
+<p><code>file</code>: A single Dataset Row</p>
+<pre><code class="language-python">def compute_gt(self, file):
+
+    &quot;&quot;&quot;
+    Args:
+        file (_type_): dataset row.
+
+    Returns:
+        gt: numpy array with shape (num_frames, num_speakers).
+    &quot;&quot;&quot;
+
+    audio = torch.tensor(file[&quot;audio&quot;][&quot;array&quot;]).unsqueeze(0).to(torch.float32)
+    sample_rate = file[&quot;audio&quot;][&quot;sampling_rate&quot;]
+
+    audio_duration = len(audio[0]) / sample_rate
+    num_frames = int(round(audio_duration / self.resolution))
+
+    labels = list(set(file[&quot;speakers&quot;]))
+
+    gt = np.zeros((num_frames, len(labels)), dtype=np.uint8)
+
+    for i in range(len(file[&quot;timestamps_start&quot;])):
+        start = file[&quot;timestamps_start&quot;][i]
+        end = file[&quot;timestamps_end&quot;][i]
+        speaker = file[&quot;speakers&quot;][i]
+        start_frame = int(round(start / self.resolution))
+        end_frame = int(round(end / self.resolution))
+        speaker_index = labels.index(speaker)
+
+        gt[start_frame:end_frame, speaker_index] += 1
+
+    return gt
+</code></pre>
+<p><strong>Predict Function</strong></p>
+<pre><code class="language-python">def predict(self, file):
+
+    sample = {}
+    sample[&quot;waveform&quot;] = (
+        torch.from_numpy(file[&quot;audio&quot;][&quot;array&quot;])
+        .to(self.device, dtype=self.pipeline._segmentation.model.dtype)
+        .unsqueeze(0)
+    )
+    sample[&quot;sample_rate&quot;] = file[&quot;audio&quot;][&quot;sampling_rate&quot;]
+
+    prediction = self.pipeline(sample)
+    # print(&quot;Prediction data: &quot;, prediction.data )
+
+    return prediction
+</code></pre>
+<p><strong>Compute on File</strong></p>
+<p>Function that calculates the f1 score of a <code>file</code>(Dataset Row) using the <code>precision</code> and <code>recall</code>. It also calculates the <code>der</code>(Diarization Error rate) and can be edited to extract more evaluation metrics such as <code>Segmentation Purity</code> and <code>Segmentation Coverage</code>.</p>
+<p>For the purpose of this demonstration, the latter two were not obtained. Details about Segmentation Coverage and Segmentation Purity can be obtained <a href="https://pyannote.github.io/pyannote-metrics/reference.html#segmentation">here</a>.</p>
+<pre><code class="language-python">
+
+def compute_metrics_on_file(self, file):
+
+    pred = self.predict(file)
+    gt = self.compute_gt(file)
+
+    sliding_window = SlidingWindow(start=0, step=self.resolution, duration=self.resolution)
+    gt = SlidingWindowFeature(data=gt, sliding_window=sliding_window)
+
+    gt = self.pipeline.to_annotation(
+        gt,
+        min_duration_on=0.0,
+        min_duration_off=self.pipeline.segmentation.min_duration_off,
+    )
+
+    mapping = {label: expected_label for label, expected_label in zip(gt.labels(), self.pipeline.classes())}
+
+    gt = gt.rename_labels(mapping=mapping)
+
+
+    der = self.metrics[&quot;der&quot;](pred, gt)
+    identificationPrecision = self.metrics[&quot;identification_precision&quot;](pred, gt)
+    identificationRecall = self.metrics[&quot;identification_recall&quot;](pred, gt)
+    identificationF1 = (2 * identificationPrecision * identificationRecall) / (identificationRecall + identificationPrecision)
+
+    return {&quot;der&quot;: der, &quot;identificationF1&quot;: identificationF1}
+</code></pre>
+<p><strong>Compute Metrics</strong></p>
+<p>This function iteratively calls the <code>compute_metrics_on_file</code> function to perform computation on all the files in the dataset.</p>
+<p><code>Returns</code>: The average values of the <code>der</code>(diarization error rate) and <code>f1</code>(F1 Score).</p>
+<pre><code class="language-python">def compute_metrics(self):
+
+    der = 0
+    f1 = 0
+    for file in tqdm(self.test_dataset):
+        met = self.compute_metrics_on_file(file)
+        der += met[&quot;der&quot;]
+        f1 += met[&quot;identificationF1&quot;]
+
+    der /= len(self.test_dataset)
+    f1 /= len(self.test_dataset)
+
+    return {&quot;der&quot;: der, &quot;identificationF1Score&quot;: f1}
+</code></pre>
+<h3 id="sample-output_1">Sample Output</h3>
+<p>An example of the output as expected from the edited script.</p>
+<p><img alt="alt text" src="../image-2.png" /></p>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+    
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>
