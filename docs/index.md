@@ -31,7 +31,7 @@ This documentation serves as the official guide for the **Leb** project, which i
     - [Speaker Diarization](#diarization)
         - [Diarization](tutorials/13-diarization.md)
         - [Fine-Tuning](tutorials/14-diarization-training.md)
-        - [Using Finetuned Model](tutorials/15-Loading-finetuned-diarization.md)
+
 - [Reference Docs](#reference)
     - [Reference](reference.md)
 
