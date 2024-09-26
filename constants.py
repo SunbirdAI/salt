@@ -1,3 +1,14 @@
+SALT_LANGUAGE_NAMES = {
+    'ach': 'Acholi',
+    'eng': 'English,
+    'ibo': 'Igbo',
+    'lgg': 'Lugbara',
+    'lug': 'Luganda',
+    'nyn': 'Runyankole',
+    'swa': 'Swahili',
+    'teo': 'Ateso',
+}
+
 SALT_LANGUAGE_TOKENS_WHISPER = {
     # Exact/close mapping
     'eng': 50259,
