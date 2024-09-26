@@ -1,6 +1,6 @@
 SALT_LANGUAGE_NAMES = {
     'ach': 'Acholi',
-    'eng': 'English,
+    'eng': 'English',
     'ibo': 'Igbo',
     'lgg': 'Lugbara',
     'lug': 'Luganda',
