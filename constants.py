@@ -23,13 +23,13 @@ SALT_LANGUAGE_TOKENS_WHISPER = {
 
 SALT_LANGUAGE_TOKENS_NLLB_TRANSLATION = {
     # Exact/close mapping
-    'eng': 'eng_Latn',
-    'lug': 'lug_Latn',
-    'ach': 'luo_Latn',
-    'ibo': 'ibo_Latn',
-    'swa': 'swh_Latn',
+    'eng': 256047, # eng_Latn
+    'lug': 256110, # lug_Latn
+    'ach': 256111, # luo_Latn
+    'ibo': 256073, # ibo_Latn
+    'swa': 256168, # swh_Latn
     # Overwrite unused language tokens
-    'nyn': 'ace_Latn',
-    'teo': 'afr_Latn',
-    'lgg': 'aka_Latn',
+    'nyn': 256002,
+    'teo': 256006,
+    'lgg': 256008,
 }
