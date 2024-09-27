@@ -7,6 +7,8 @@ SALT_LANGUAGE_NAMES = {
     'nyn': 'Runyankole',
     'swa': 'Swahili',
     'teo': 'Ateso',
+    'xog': 'Lusoga',
+    'ttj': 'Rutooro',
 }
 
 SALT_LANGUAGE_TOKENS_WHISPER = {
@@ -19,6 +21,8 @@ SALT_LANGUAGE_TOKENS_WHISPER = {
     'lug': 50355,
     'nyn': 50354,
     'teo': 50353,
+    'xog': 50352,
+    'ttj': 50351,
 }
 
 SALT_LANGUAGE_TOKENS_NLLB_TRANSLATION = {
@@ -32,4 +36,6 @@ SALT_LANGUAGE_TOKENS_NLLB_TRANSLATION = {
     'nyn': 256002,
     'teo': 256006,
     'lgg': 256008,
+    'xog': 256009,
+    'ttj': 256010,
 }
