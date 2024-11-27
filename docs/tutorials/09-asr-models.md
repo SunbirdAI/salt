@@ -13,7 +13,8 @@ Before getting started, ensure that you have the following prerequisites:
 ## Installation
 To begin, install the necessary dependencies by running the following commands:
 
-```{bash}
+```bash
+
 !pip install -q jiwer evaluate
 !pip install -qU accelerate
 !pip install -q transformers[torch]
@@ -29,7 +30,8 @@ These commands will install the required libraries, including Jiwer, Evaluate, A
 Create a YAML configuration file named asr_config.yml with the necessary settings for your training. Here's an example configuration:
 
 
-```{yaml}
+```yaml
+
 train:
   source:
     language: [luganda, english]
@@ -80,7 +82,8 @@ To use the trained model for inference, follow these steps:
 1. Load the trained model and processor:
 
 
-```{python}
+```python
+
 model = Wav2Vec2ForCTC.from_pretrained("path/to/trained/model")
 processor = Wav2Vec2Processor.from_pretrained("path/to/processor")
 ```

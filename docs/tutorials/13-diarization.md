@@ -10,7 +10,7 @@ Speaker Diarization at Sunbird is performed using pyannote's speaker-diarization
 
 The necessary libraries to perform speaker diarization required for efficient execution of the pipeline and determine various metrics are installed and imported.
 
-```python
+```bash
 !pip install pyctcdecode
 !pip install kenlm
 !pip install jiwer
@@ -19,8 +19,9 @@ The necessary libraries to perform speaker diarization required for efficient ex
 !pip install pandas
 !pip install pyannote.audio
 !pip install onnxruntime
+```
 
-
+```python
 import torch
 from huggingface_hub import hf_hub_download
 from transformers import (
@@ -65,7 +66,7 @@ tokenizer = Wav2Vec2CTCTokenizer.from_pretrained(model_id)
 
 #### Tokenizer setup
 
-```python 
+```python
 tokenizer.set_target_lang("eng")
 model.load_adapter("eng_meta")
 ```
@@ -82,6 +83,7 @@ sorted_vocab_dict = {k.lower(): v for k, v in sorted(vocab_dict.items(), key=lam
 ```
 
 #### Language model file setup
+
 Within the `Sunbird/sunbird-mms` huggingface repository is a subfolder named `language_model` containing various language models capable of efficient transcription.
 
 ```python
@@ -136,7 +138,7 @@ pipe = AutomaticSpeechRecognitionPipeline(
  transcription = pipe("/content/Kibuuka_eng.mp3")
 ```
 
- The resulting dictionary `transcription` will contain a `text` key containing all the transcribed text as well as a `chunks` containing individual texts along with their time stamps of the format below:
+The resulting dictionary `transcription` will contain a `text` key containing all the transcribed text as well as a `chunks` containing individual texts along with their time stamps of the format below:
 
 ```python
  {
@@ -165,7 +167,7 @@ import librosa
 SAMPLE_RATE = 16000
 
 def load_audio(file: str, sr: int = SAMPLE_RATE) -> np.ndarray:
-    
+
     try:
         # librosa automatically resamples to the given sample rate (if necessary)
         # and converts the signal to mono (by averaging channels)
@@ -175,6 +177,7 @@ def load_audio(file: str, sr: int = SAMPLE_RATE) -> np.ndarray:
 
     return audio
 ```
+
 The `load_audio` functions takes an audio file and sampling rate as one of its parameters. The sampling rate used for this Speaker Diarization is 16000. This sampling rate should be the same sampling rate used to transcribe the audio from using the Sunbird mms to ensure consistency with the output.
 
 **Diarization Pipeline**
@@ -182,7 +185,6 @@ The `load_audio` functions takes an audio file and sampling rate as one of its p
 The class `Diarization Pipeline` is a custom class created to facilitate the diarization task. It initializes with a pretrained model and can be called with an audio file or waveform to perform diarization.
 
 It returns a pandas DataFrame with with columns for the segment, label, speaker, start time, and end time of each speaker segment.
-
 
 ```python
 class DiarizationPipeline:
@@ -242,7 +244,7 @@ The function iterates through segments of a transcript and assigns the speaker l
 In case of no overlap, a the fill_nearest parameter can be set to `True`, then the function will assign the speakers to segments by finding the closest speaker in time.
 
 The function takes parameters:
-    
+
 `diarize_df`: a pandas DataFrame returned by the DiarizationPipeline containing the diarization information with columns like `start`, `end` and `speaker`
 
 `transcript_result`: A dictionary with a key `chunks` that contains a list of trancript `Segments` obtained from the ASR pipeline.
@@ -264,7 +266,7 @@ The function takes parameters:
 ```python
 
 def assign_word_speakers(diarize_df, transcript_result, fill_nearest=False):
- 
+
     transcript_segments = transcript_result["chunks"]
 
     for seg in transcript_segments:
@@ -288,6 +290,7 @@ def assign_word_speakers(diarize_df, transcript_result, fill_nearest=False):
 ```
 
 **Running the diarization model**
+
 ```python
 diarize_model = DiarizationPipeline(use_auth_token=hf_token, device=device)
 diarize_segments = diarize_model("/content/Kibuuka_eng.mp3", min_speakers=1, max_speakers=2)

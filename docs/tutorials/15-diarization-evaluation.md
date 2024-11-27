@@ -355,7 +355,6 @@ For the purpose of this demonstration, the latter two were not obtained. Details
 
 ```python
 
-
 def compute_metrics_on_file(self, file):
 
     pred = self.predict(file)
@@ -390,6 +389,7 @@ This function iteratively calls the `compute_metrics_on_file` function to perfor
 `Returns`: The average values of the `der`(diarization error rate) and `f1`(F1 Score).
 
 ```python
+
 def compute_metrics(self):
 
     der = 0

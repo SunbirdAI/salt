@@ -1,33 +1,175 @@
-site_name: Leb Documentation
-theme:
-  name: readthedocs
+site_name: SALT Documentation
+site_url: https://salt.sunbird.ai
+repo_url: https://github.com/SunbirdAI/salt
+repo_name: SunbirdAI/salt
 
+# Configuration
+theme:
+  name: material
+  # custom_dir: material/overrides
+  features:
+    - announce.dismiss
+    - content.action.edit
+    - content.action.view
+    - content.code.annotate
+    - content.code.copy
+    - content.code.select
+    # - content.footnote.tooltips
+    # - content.tabs.link
+    - content.tooltips
+    # - header.autohide
+    # - navigation.expand
+    - navigation.footer
+    - navigation.indexes
+    # - navigation.instant
+    # - navigation.instant.prefetch
+    # - navigation.instant.progress
+    # - navigation.prune
+    - navigation.sections
+    - navigation.path
+    - navigation.tabs
+    # - navigation.tabs.sticky
+    - navigation.top
+    - navigation.tracking
+    - search.highlight
+    - search.share
+    - search.suggest
+    - toc.follow
+    # - toc.integrate
+  palette:
+    # - media: "(prefers-color-scheme)"
+    #   toggle:
+    #     icon: material/weather-night
+    #     name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: white
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to system preference
+  font:
+    text: Roboto
+    code: Roboto Mono
+  favicon: assets/favicon.ico
+  logo: assets/logo.png
+
+extra_css:
+  - stylesheets/custom.css
+
+# Plugins
 plugins:
-  - mkdocstrings
+  #   - blog
+  - search:
+      separator: '[\s\u200b\-_,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
+  - minify:
+      minify_html: true
+
+# Additional configuration
+extra:
+  generator: false
+  status:
+    new: Recently added
+    deprecated: Deprecated
+  # analytics:
+  #   provider: google
+  #   property: !ENV GOOGLE_ANALYTICS_KEY
+#   social:
+#     - icon: fontawesome/solid/globe
+#       link: https://sunbird.ai
+#     - icon: fontawesome/brands/github
+#       link: https://github.com/SunbirdAI
+#     - icon: fontawesome/brands/x-twitter
+#       link: https://twitter.com/sunbirdai
+#     - icon: fontawesome/brands/linkedin
+#       link: https://ug.linkedin.com/company/sunbird-ai
+
+# Extensions
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+      # auto_title: true
+      # linenums: true
+      linenums_style: pymdownx-inline
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  # - pymdownx.magiclink:
+  #     normalize_issue_symbols: true
+  #     repo_url_shorthand: true
+  #     user: squidfunk
+  #     repo: mkdocs-material
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets:
+      auto_append:
+        - includes/mkdocs.md
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+      combine_header_slug: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
 
 nav:
-  - '💬 LEB': 'index.md'
-  - 'Getting Started':
-      - 'Introduction': tutorials/01-introduction.md
-      - 'Installation': tutorials/02-installation.md
-      - 'Quick Tour': tutorials/03-quick-tour.md
-  - 'Tutorials':
-      - 'Beginner':
-          - 'Basics': tutorials/04-basics.md
-          - 'Data Exploration': tutorials/05-data-exploration.md
-      - 'Leb Datasets':
-          - 'Text Datasets': tutorials/06-text-datasets.md
-          - 'Speech Datasets': tutorials/07-speech-datasets.md
-      - 'Leb Models':
-          - 'Translation Models': tutorials/08-translation-models.md
-          - 'ASR Models': tutorials/09-asr-models.md
-          - 'TTS Models': tutorials/10-tts-models.md
-      - 'Leb Pipelines':
-          - 'Data Loading': tutorials/11-data-loading.md
-          - 'Training': tutorials/12-training.md
-      - 'Speaker Diarization':
+  - SALT: index.md
+  - Getting Started:
+      - "Introduction": tutorials/01-introduction.md
+      - "Installation": tutorials/02-installation.md
+      - "Quick Tour": tutorials/03-quick-tour.md
+  - Tutorials:
+      - Beginner:
+          - "Basics": tutorials/04-basics.md
+          - "Data Exploration": tutorials/05-data-exploration.md
+      - SALT Datasets: tutorials/07-speech-datasets.md
+      - SALT Models:
+          - "Translation Models": tutorials/08-translation-models.md
+          - "ASR Models": tutorials/09-asr-models.md
+          - "TTS Models": tutorials/10-tts-models.md
+      - SALT Pipelines:
+          - "Data Loading": tutorials/11-data-loading.md
+          - "Training": tutorials/12-training.md
+      - Speaker Diarization:
           - "Diarization": tutorials/13-diarization.md
           - "Fine-Tuning Diarization": tutorials/14-diarization-training.md
-  - 'Reference':
-      - 'Reference': reference.md
-
+          - "Diarization evaluation": "tutorials/15-diarization-evaluation.md"
+  - Reference:
+      - "Reference": reference.md
+  # - Blog:
+  #     - Intro: blog/index.md
+  # - API:
+  #     - Sunbird AI API: API/index.md
