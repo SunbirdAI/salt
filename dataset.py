@@ -112,12 +112,12 @@ def _load_single_huggingface_dataset(load_dataset_params):
             language = COMMON_VOICE_LANGUAGE_MAPPING(load_dataset_params['name'])
         else:
             language = load_dataset_params['name']
+            available_configs = ', '.join(
+                [k for k in COMMON_VOICE_LANGUAGE_MAPPING.keys()])
             raise Warning(
                 'Not sure how to map the Common Voice subset '
                f'{load_dataset_params["name"]} to a SALT language code. '
-                'Available options are: '
-                ', '.join([k for k in COMMON_VOICE_LANGUAGE_MAPPING.keys()])
-                '.')
+               f'Available options are: {available_configs}.')
         ds.set_transform(
             lambda x: _common_voice_to_SALT(x, language))
 
