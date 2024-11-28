@@ -109,7 +109,7 @@ def _load_single_huggingface_dataset(load_dataset_params):
     }
     if load_dataset_params['path'].startswith('mozilla-foundation/common_voice'):
         if load_dataset_params['name'] in COMMON_VOICE_LANGUAGE_MAPPING:
-            language = COMMON_VOICE_LANGUAGE_MAPPING(load_dataset_params['name'])
+            language = COMMON_VOICE_LANGUAGE_MAPPING[load_dataset_params['name']]
         else:
             language = load_dataset_params['name']
             available_configs = ', '.join(
@@ -477,8 +477,10 @@ def create(config):
     generator_function = lambda: _create_generator(config)
     ds = datasets.IterableDataset.from_generator(generator_function)
     
+    # The individual datasets are already shuffled as needed, but do a little
+    # more so that consecutive samples are from different batches.
     if config.get('shuffle'):
-        ds = ds.shuffle()
+        ds = ds.shuffle(buffer_size=50)
 
     # Apply preprocessing
     preprocessing_fn = _build_preprocessing_functions(config)
