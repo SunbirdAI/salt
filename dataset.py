@@ -95,9 +95,21 @@ def _load_single_huggingface_dataset(load_dataset_params):
             ds = ds.rename_column(from_name, to_name)
       
     # If this is a Common Voice dataset, then remap it to SALT format.
-    if load_dataset_params['path'] == 'mozilla-foundation/common_voice_13_0':
-        if load_dataset_params['name'] == 'lg':
-            language = 'lug'
+    COMMON_VOICE_LANGUAGE_MAPPING = {
+        'lg': 'lug',
+        'sw': 'swa',
+        'rw': 'kin',
+        'ig': 'ibo',
+        'yo': 'yor',
+        'am': 'amh',
+        'ti': 'tir',
+        'ha': 'hau',
+        'zu': 'zul', 
+        'nso': 'nso',
+    }
+    if load_dataset_params['path'].startswith('mozilla-foundation/common_voice'):
+        if load_dataset_params['name'] in COMMON_VOICE_LANGUAGE_MAPPING:
+            language = COMMON_VOICE_LANGUAGE_MAPPING(load_dataset_params['name'])
         else:
             language = load_dataset_params['name']
             raise Warning(
