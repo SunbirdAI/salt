@@ -210,6 +210,24 @@ def _load_huggingface_datasets(config):
         )
 
     load_list = config['huggingface_load']
+
+    # Optionally pre-download everything at once
+    if config.get('download_datasets_in_parallel'):
+        threads = []
+        for l in _ensure_list(load_list):
+            if 'join' in l:
+                for i in (0, 1):
+                    thread = threading.Thread(
+                        target=_load_single_huggingface_dataset, args=(l['join'][i],))
+                    threads.append(thread)
+            else:
+                thread = threading.Thread(
+                    target=_load_single_huggingface_dataset, args=(l,))
+                threads.append(thread)
+                thread.start()
+        for thread in threads:
+            thread.join()
+
     for l in _ensure_list(load_list):
         if 'join' in l:
             if not isinstance(l['join'], list) or len(l['join']) != 2:
