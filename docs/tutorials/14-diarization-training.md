@@ -2,7 +2,7 @@
 
 This process highlights the steps taken for Model Training on the [CallHome Dataset](https://huggingface.co/datasets/talkbank/callhome). For this particular dataset we used the English version of the CallHome Dataset. The Model Training Architecture, Loss Functions, Optimisation Techniques, Data Augmentation and Metrics Used.
 
-# Segmentation Model Configuration Explained
+## Segmentation Model Configuration Explained
 
 ## Overview
 
@@ -38,7 +38,7 @@ Parameters:
 
 `target`: Ground truth labels. Type: `torch.Tensor`
 
-`weight`:  Type: `Optional[torch.Tensor]`
+`weight`: Type: `Optional[torch.Tensor]`
 
 Returns: Permutation-invariant segmentation loss. `torch.Tensor`
 
@@ -47,6 +47,7 @@ Returns: Permutation-invariant segmentation loss. `torch.Tensor`
 `to_pyannote_model`: Converts the current model to a pyannote segmentation model for use in pyannote pipelines
 
 ```python
+
 class SegmentationModel(PreTrainedModel):
     config_class = SegmentationModelConfig
 
@@ -121,7 +122,7 @@ class SegmentationModel(PreTrainedModel):
         target: torch.Tensor,
         weight: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-       
+
 
         if self.specifications.powerset:
             # `clamp_min` is needed to set non-speech weight to 1.
@@ -139,7 +140,7 @@ class SegmentationModel(PreTrainedModel):
 
     @classmethod
     def from_pyannote_model(cls, pretrained):
-       
+
         # Initialize model:
         specifications = copy.deepcopy(pretrained.specifications)
 
@@ -178,7 +179,7 @@ class SegmentationModel(PreTrainedModel):
         return model
 
     def to_pyannote_model(self):
-       
+
         seg_model = PyanNet(sincnet={"stride": 10})
         seg_model.hparams.update(self.model.hparams)
 
@@ -208,8 +209,9 @@ class SegmentationModel(PreTrainedModel):
 - Configuration parameters like chunk duration, number of speakers per chunk/frame, minimum duration, warm-up period, etc.
 
 ```python
+
 class SegmentationModelConfig(PretrainedConfig):
-    
+
     model_type = "pyannet"
 
     def __init__(
@@ -222,7 +224,7 @@ class SegmentationModelConfig(PretrainedConfig):
         weigh_by_cardinality=False,
         **kwargs,
     ):
-       
+
         super().__init__(**kwargs)
         self.chunk_duration = chunk_duration
         self.max_speakers_per_frame = max_speakers_per_frame
@@ -249,12 +251,15 @@ class SegmentationModelConfig(PretrainedConfig):
 ### Optimization Techniques
 
 ### Batch Size
- - This refers to the number of samples that you feed into your model  at each iteration of the training process. This can be adjusted accordingly to optimise the performance of your model
+
+- This refers to the number of samples that you feed into your model at each iteration of the training process. This can be adjusted accordingly to optimise the performance of your model
 
 ### Learning Rate
- - This is an optimization tunning parameter that determines the step-size at each iteration while moving towards a minimum loss function
+
+- This is an optimization tunning parameter that determines the step-size at each iteration while moving towards a minimum loss function
 
 ### Training Epochs
+
 - An epoch refers to a complete pass through the entire training dataset. A model is exposed to all the training examples and updates its parametrs basd on the patterns it learns. In our case, we try and iterate and test with 5, 10 and 20 epochs and find that the Diarisation Error Rate remains constant at "'der': 0.23994926057695026"
 
 #### Warm-up
@@ -269,10 +274,8 @@ class SegmentationModelConfig(PretrainedConfig):
 ### Data Augmentation Methods
 
 - For our case this is done using the the DataCollator class. This class is responsible for collecting data and ensuring that the target labels are dynamically padded.
--  Pads the target labels to ensure they have the same shape.
+- Pads the target labels to ensure they have the same shape.
 - Pads with zeros if the number of speakers in a chunk is less than the maximum number of speakers per chunk
-
-
 
 #### Preprocessing Steps
 
@@ -280,12 +283,13 @@ class SegmentationModelConfig(PretrainedConfig):
 - `Preprocess` class used to handle these preprocessing steps is not detailed here, but it's responsible for preparing the input data.
 
 ```python
+
 class Preprocess:
     def __init__(
         self,
         config,
     ):
-    
+
         self.chunk_duration = config.chunk_duration
         self.max_speakers_per_frame = config.max_speakers_per_frame
         self.max_speakers_per_chunk = config.max_speakers_per_chunk
@@ -301,7 +305,7 @@ class Preprocess:
         ).shape
 
     def get_labels_in_file(self, file):
-     
+
 
         file_labels = []
         for i in range(len(file["speakers"][0])):
@@ -311,7 +315,7 @@ class Preprocess:
         return file_labels
 
     def get_segments_in_file(self, file, labels):
-        
+
 
         file_annotations = []
 
@@ -328,7 +332,7 @@ class Preprocess:
         return annotations
 
     def get_chunk(self, file, start_time):
-        
+
 
         sample_rate = file["audio"][0]["sampling_rate"]
 
@@ -420,6 +424,7 @@ class Preprocess:
 - For the metrics we have the Diarisation Error Rate(DER), FalseAlarm Rate, MissedDetectionRate and the SpeakerConfusionRate with the implementation in the metrics class below.
 
 ```python
+
 import numpy as np
 import torch
 from pyannote.audio.torchmetrics import (DiarizationErrorRate, FalseAlarmRate,
@@ -544,9 +549,10 @@ class DataCollator:
 ### Training Script
 
 - The script [train_segmentation.py](https://github.com/huggingface/diarizers/)
- can be used to pre-process a diarization dataset and subsequently fine-tune the pyannote segmentation model. In the following example, we fine-tuned the segmentation model on the English subset of the CallHome dataset, a conversational dataset between native speakers:
+  can be used to pre-process a diarization dataset and subsequently fine-tune the pyannote segmentation model. In the following example, we fine-tuned the segmentation model on the English subset of the CallHome dataset, a conversational dataset between native speakers:
 
 ```bash
+
 !python3 train_segmentation.py \
     --dataset_name=diarizers-community/callhome \
     --dataset_config_name=eng \
@@ -574,6 +580,7 @@ class DataCollator:
 The script [test_segmentation.py](https://github.com/huggingface/diarizers/)can be used to evaluate a fine-tuned model on a diarization dataset. In the following example, we evaluate the fine-tuned model from the previous step on the test split of the CallHome English dataset:
 
 ```bash
+
 !python3 test_segmentation.py \
     --dataset_name=diarizers-community/callhome \
     --dataset_config_name=eng \
@@ -588,12 +595,12 @@ The script [test_segmentation.py](https://github.com/huggingface/diarizers/)can 
 
 ![alt text](EVAL.PNG)
 
-
 ### Inference with Pyannote
+
 - The fine-tuned segmentation model can easily be loaded into the pyannote speaker diarization pipeline for inference. To do so, we load the pre-trained speaker diarization pipeline, and subsequently override the segmentation model with our fine-tuned checkpoint:
 
-
 ```python
+
 from diarizers import SegmentationModel
 from pyannote.audio import Pipeline
 from datasets import load_dataset
@@ -625,5 +632,3 @@ diarization = pipeline(sample)
 with open("audio.rttm", "w") as rttm:
     diarization.write_rttm(rttm)
 ```
-
-
