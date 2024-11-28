@@ -56,10 +56,12 @@ theme:
         icon: material/weather-sunny
         name: Switch to system preference
   font:
-    text: Roboto
-    code: Roboto Mono
+    text: Open Sans
+    code: Open Sans Mono
   favicon: assets/favicon.ico
   logo: assets/logo.png
+  icon:
+    repo: fontawesome/brands/github
 
 extra_css:
   - stylesheets/custom.css
@@ -150,11 +152,11 @@ nav:
   - Getting Started:
       - "Introduction": tutorials/01-introduction.md
       - "Installation": tutorials/02-installation.md
-      - "Quick Tour": tutorials/03-quick-tour.md
+      # - "Quick Tour": tutorials/03-quick-tour.md
   - Tutorials:
       - Beginner:
           - "Basics": tutorials/04-basics.md
-          - "Data Exploration": tutorials/05-data-exploration.md
+          # - "Data Exploration": tutorials/05-data-exploration.md
       - SALT Datasets: tutorials/07-speech-datasets.md
       - SALT Models:
           - "Translation Models": tutorials/08-translation-models.md
