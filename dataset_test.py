@@ -253,7 +253,7 @@ class DatasetTestCase(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
         warnings.simplefilter("default", ResourceWarning)
-      
+        
     def test_preprocessing_augmentation(self):
         def random_prefix(r, src_or_tgt):
             for i in range(len(r['source'])):
@@ -742,7 +742,6 @@ class DatasetTestCase(unittest.TestCase):
       ]
 
       self.assertNestedAlmostEqual(list(ds), expected)
-        
 
     def test_audio_object_dataset(self):
       yaml_config = '''
@@ -797,7 +796,6 @@ class DatasetTestCase(unittest.TestCase):
 
       self.assertNestedAlmostEqual(list(ds), expected)
 
-      
     def test_join_unsorted_raises_exception(self):
       def try_creating_unsorted():  
           yaml_config = '''
@@ -914,7 +912,7 @@ class DatasetTestCase(unittest.TestCase):
         ds = list(dataset.create(config))        
         
         self.assertEqual(len(list(ds)), 2)
-        
+ 
 if __name__ == '__main__':
     unittest.main()
 

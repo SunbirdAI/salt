@@ -57,14 +57,6 @@ def _google_fleurs_to_SALT(batch, language):
     batch['is_studio'] = [False] * batch_size
     return batch    
 
-def _flatten_audio_type_to_array(sample):
-    # Convert datasets.features.audio.Audio to a flat array
-    audio_array = sample['audio']['array']
-    sample_rate = sample['audio']['sampling_rate']
-    sample['audio'] = audio_array
-    sample['sample_rate'] = sample_rate
-    return sample
-
 def _add_speaker_id_studio_if_not_present(sample):
     if 'speaker_id' not in sample:
         sample['speaker_id'] = 0
@@ -136,13 +128,6 @@ def _load_single_huggingface_dataset(load_dataset_params):
         ds.set_transform(
             lambda x: _google_fleurs_to_SALT(x, language))
 
-    # If it's a different dataset with an Audio type, then flatten this to an array
-    elif 'audio' in ds.features:
-        if isinstance(ds.features['audio'], datasets.features.audio.Audio):
-            ds = ds.map(_flatten_audio_type_to_array)
-        if 'speaker_id' not in ds.features or 'is_studio' not in ds.features:
-            ds = ds.map(_add_speaker_id_studio_if_not_present)
-                  
     return ds
 
 def _combine_datasets_generator(left, right):
@@ -254,6 +239,19 @@ def _load_huggingface_datasets(config):
         
     return loaded_datasets
 
+def _get_audio_from_row(row):
+    if 'audio' not in row:
+        raise ValueError(
+            'Trying to read audio, but there is no `audio` feature.')
+
+    if isinstance(row['audio'], dict):
+        audio_array = row['audio']['array']
+        sample_rate = row['audio']['sampling_rate']
+    else:
+        audio_array = row['audio']
+        sample_rate = row['sample_rate']
+    return audio_array, sample_rate
+
 def _matching_items(row, source_target_config, source_or_target):
     """Find which items in a row match the config."""
     matches = []
@@ -277,12 +275,13 @@ def _matching_items(row, source_target_config, source_or_target):
             if row.get('language') == language:    
                 if speaker_id_filter and row['speaker_id'] != speaker_id_filter:
                     continue
+                audio_array, sample_rate = _get_audio_from_row(row)
                 matches.append(
-                    {'audio': row['audio'],
-                     'sample_rate': row['sample_rate'],
-                     'language': row['language'],
-                     'speaker_id': row['speaker_id'],
-                     'is_studio': row['is_studio'],
+                    {'audio': audio_array,
+                     'sample_rate': sample_rate,
+                     'language': row.get('language') or row.get('audio_language'),
+                     'speaker_id': row.get('speaker_id'),
+                     'is_studio': row.get('is_studio'),
                     })
             if row.get(f'audio_{language}'):
                 for audio_example, sample_rate, speaker_id in zip(
