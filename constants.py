@@ -9,6 +9,8 @@ SALT_LANGUAGE_NAMES = {
     'teo': 'Ateso',
     'xog': 'Lusoga',
     'ttj': 'Rutooro',
+    'kin': 'Kinyarwanda',
+    'myx': 'Lumasaba',
 }
 
 SALT_LANGUAGE_TOKENS_WHISPER = {
@@ -23,6 +25,8 @@ SALT_LANGUAGE_TOKENS_WHISPER = {
     'teo': 50353,
     'xog': 50352,
     'ttj': 50351,
+    'kin': 50350,
+    'myx': 50349,
 }
 
 SALT_LANGUAGE_TOKENS_NLLB_TRANSLATION = {
@@ -38,4 +42,5 @@ SALT_LANGUAGE_TOKENS_NLLB_TRANSLATION = {
     'lgg': 256008,
     'xog': 256009,
     'ttj': 256010,
+    'myx': 256011,
 }

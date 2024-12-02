@@ -6,6 +6,7 @@ import time
 import types
 import heapq
 import numpy as np
+import threading
 
 from . import preprocessing
 
@@ -56,14 +57,6 @@ def _google_fleurs_to_SALT(batch, language):
     batch['is_studio'] = [False] * batch_size
     return batch    
 
-def _flatten_audio_type_to_array(sample):
-    # Convert datasets.features.audio.Audio to a flat array
-    audio_array = sample['audio']['array']
-    sample_rate = sample['audio']['sampling_rate']
-    sample['audio'] = audio_array
-    sample['sample_rate'] = sample_rate
-    return sample
-
 def _add_speaker_id_studio_if_not_present(sample):
     if 'speaker_id' not in sample:
         sample['speaker_id'] = 0
@@ -95,14 +88,29 @@ def _load_single_huggingface_dataset(load_dataset_params):
             ds = ds.rename_column(from_name, to_name)
       
     # If this is a Common Voice dataset, then remap it to SALT format.
-    if load_dataset_params['path'] == 'mozilla-foundation/common_voice_13_0':
-        if load_dataset_params['name'] == 'lg':
-            language = 'lug'
+    COMMON_VOICE_LANGUAGE_MAPPING = {
+        'lg': 'lug',
+        'sw': 'swa',
+        'rw': 'kin',
+        'ig': 'ibo',
+        'yo': 'yor',
+        'am': 'amh',
+        'ti': 'tir',
+        'ha': 'hau',
+        'zu': 'zul', 
+        'nso': 'nso',
+    }
+    if load_dataset_params['path'].startswith('mozilla-foundation/common_voice'):
+        if load_dataset_params['name'] in COMMON_VOICE_LANGUAGE_MAPPING:
+            language = COMMON_VOICE_LANGUAGE_MAPPING[load_dataset_params['name']]
         else:
             language = load_dataset_params['name']
+            available_configs = ', '.join(
+                [k for k in COMMON_VOICE_LANGUAGE_MAPPING.keys()])
             raise Warning(
                 'Not sure how to map the Common Voice subset '
-               f'{load_dataset_params["name"]} to a SALT language code.')
+               f'{load_dataset_params["name"]} to a SALT language code. '
+               f'Available options are: {available_configs}.')
         ds.set_transform(
             lambda x: _common_voice_to_SALT(x, language))
 
@@ -120,13 +128,6 @@ def _load_single_huggingface_dataset(load_dataset_params):
         ds.set_transform(
             lambda x: _google_fleurs_to_SALT(x, language))
 
-    # If it's a different dataset with an Audio type, then flatten this to an array
-    elif 'audio' in ds.features:
-        if isinstance(ds.features['audio'], datasets.features.audio.Audio):
-            ds = ds.map(_flatten_audio_type_to_array)
-        if 'speaker_id' not in ds.features or 'is_studio' not in ds.features:
-            ds = ds.map(_add_speaker_id_studio_if_not_present)
-                  
     return ds
 
 def _combine_datasets_generator(left, right):
@@ -195,6 +196,24 @@ def _load_huggingface_datasets(config):
         )
 
     load_list = config['huggingface_load']
+
+    # Optionally pre-download everything at once
+    if config.get('download_datasets_in_parallel'):
+        threads = []
+        for l in _ensure_list(load_list):
+            if 'join' in l:
+                for i in (0, 1):
+                    thread = threading.Thread(
+                        target=_load_single_huggingface_dataset, args=(l['join'][i],))
+                    threads.append(thread)
+            else:
+                thread = threading.Thread(
+                    target=_load_single_huggingface_dataset, args=(l,))
+                threads.append(thread)
+                thread.start()
+        for thread in threads:
+            thread.join()
+
     for l in _ensure_list(load_list):
         if 'join' in l:
             if not isinstance(l['join'], list) or len(l['join']) != 2:
@@ -220,6 +239,19 @@ def _load_huggingface_datasets(config):
         
     return loaded_datasets
 
+def _get_audio_from_row(row):
+    if 'audio' not in row:
+        raise ValueError(
+            'Trying to read audio, but there is no `audio` feature.')
+
+    if isinstance(row['audio'], dict):
+        audio_array = row['audio']['array']
+        sample_rate = row['audio']['sampling_rate']
+    else:
+        audio_array = row['audio']
+        sample_rate = row['sample_rate']
+    return audio_array, sample_rate
+
 def _matching_items(row, source_target_config, source_or_target):
     """Find which items in a row match the config."""
     matches = []
@@ -243,12 +275,13 @@ def _matching_items(row, source_target_config, source_or_target):
             if row.get('language') == language:    
                 if speaker_id_filter and row['speaker_id'] != speaker_id_filter:
                     continue
+                audio_array, sample_rate = _get_audio_from_row(row)
                 matches.append(
-                    {'audio': row['audio'],
-                     'sample_rate': row['sample_rate'],
-                     'language': row['language'],
-                     'speaker_id': row['speaker_id'],
-                     'is_studio': row['is_studio'],
+                    {'audio': audio_array,
+                     'sample_rate': sample_rate,
+                     'language': row.get('language') or row.get('audio_language'),
+                     'speaker_id': row.get('speaker_id'),
+                     'is_studio': row.get('is_studio'),
                     })
             if row.get(f'audio_{language}'):
                 for audio_example, sample_rate, speaker_id in zip(
@@ -462,8 +495,10 @@ def create(config):
     generator_function = lambda: _create_generator(config)
     ds = datasets.IterableDataset.from_generator(generator_function)
     
+    # The individual datasets are already shuffled as needed, but do a little
+    # more so that consecutive samples are from different batches.
     if config.get('shuffle'):
-        ds = ds.shuffle()
+        ds = ds.shuffle(buffer_size=50)
 
     # Apply preprocessing
     preprocessing_fn = _build_preprocessing_functions(config)
