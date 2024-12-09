@@ -192,9 +192,9 @@ nav:
           - "Diarization": tutorials/13-diarization.md
           - "Fine-Tuning Diarization": tutorials/14-diarization-training.md
           - "Diarization evaluation": "tutorials/15-diarization-evaluation.md"
+  - API:
+      - Sunbird AI API: API/index.md
   - Reference:
       - "Reference": reference.md
   # - Blog:
   #     - Intro: blog/index.md
-  # - API:
-  #     - Sunbird AI API: API/index.md
