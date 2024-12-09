@@ -235,7 +235,7 @@ Refer to the sample code below. Replace `{access_token}` with the token you got 
         });
     ```
 
-## Part 4: How to call the summary endpoint
+### Part 4: How to call the summary endpoint
 
 === "Python"
 
@@ -317,7 +317,7 @@ Refer to the sample code below. Replace `{access_token}` with the token you got 
         });
     ```
 
-## Part 5: How to call the language_id endpoint
+### Part 5: How to call the language_id endpoint
 
 === "Python"
 
