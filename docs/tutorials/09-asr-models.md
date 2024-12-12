@@ -1,89 +1,123 @@
-## Multilingual ASR Training for Luganda+English using the Leb Module
 
-This tutorial provides a step-by-step guide on how to perform multilingual Automatic Speech Recognition (ASR) training for Luganda and English languages using the Leb module.
+## Whisper large for Ugandan languages
 
-### Prerequisites
-Before getting started, ensure that you have the following prerequisites:
+This model is an adaptation of whisper-large-v2 for the following languages widely spoken in Uganda:
+Luganda, Acholi, Lugbara, Ateso, Runyankole and English (Ugandan accent).
 
-* Python 3.x installed
-* [optional] - Access to a Google Cloud account with storage access
-* MLflow tracking credentials (username and password)
-* [optional] Path to your service account JSON key file
+### Training
 
-## Installation
-To begin, install the necessary dependencies by running the following commands:
-
-```bash
-
-!pip install -q jiwer evaluate
-!pip install -qU accelerate
-!pip install -q transformers[torch]
-!git clone https://github.com/jqug/leb.git
-!pip install -qr leb/requirements.txt
-!pip install -q mlflow psutil pynvml
-```
-
-
-These commands will install the required libraries, including Jiwer, Evaluate, Accelerate, Transformers, MLflow, and the Leb module.
-
-###  Configuration
-Create a YAML configuration file named asr_config.yml with the necessary settings for your training. Here's an example configuration:
-
-
-```yaml
-
-train:
-  source:
-    language: [luganda, english]
-    # Add other training dataset configurations
-
-validation:
-  source:
-    language: [luganda, english]
-    # Add other validation dataset configurations
-
-pretrained_model: "facebook/wav2vec2-large-xlsr-53"
-pretrained_adapter: null
-
-Wav2Vec2ForCTC_args:
-  adapter_model_name: "wav2vec2"
-
-training_args:
-  output_dir: "luganda_english_asr"
-  # Add other training arguments
-```
-
-Load the configuration file in your Python script.
-
-### Data Preparation
-1. Load the training and validation datasets using the Leb module.
-2. Create a tokenizer and processor based on the configuration.
-3. Prepare the datasets for training and validation.
-
-### Model Setup
-1. Load the pre-trained model and initialize the adapter layers.
-2. Define the compute metrics function.
-3. Set up the training arguments and create the trainer.
-### MLflow Integration
-1. Set up MLflow tracking credentials and tracking URI.
-2. Set the MLflow experiment.
-
-###  Training and Evaluation
-1. Start an MLflow run and train the model.
-2. Save the trained model and log artifacts.
+The model was trained with the SALT dataset, Common Voice (Luganda) and FLEURS datasets.
+To help with generalisation in practical settings, training used addition of random noise
+and random downsampling to 8kHz to simulate phone speech.
 
 ### Usage
-To use the trained model for inference, follow these steps:
 
-### Load the trained model and processor:
-
-To use the trained model for inference, follow these steps:
-
-1. Load the trained model and processor:
+The model is used in a similar way to the base Whisper model.
+The model will attempt to auto-detect the language and provide a transcription. 
+However, note that language detection is not always accurate and results may be
+improved by specifying it instead. The languages in this model are not supported
+by the base Whisper model, so the format is slightly different:
 
 
 ```python
+import transformers
+import datasets
+import torch
 
-model = Wav2Vec2ForCTC.from_pretrained("path/to/trained/model")
-processor = Wav2Vec2Processor.from_pretrained("path/to/processor")
+processor = transformers.WhisperProcessor.from_pretrained(
+    "Sunbird/asr-whisper-large-v2-salt")
+model = transformers.WhisperForConditionalGeneration.from_pretrained(
+    "Sunbird/asr-whisper-large-v2-salt")
+
+SALT_LANGUAGE_TOKENS_WHISPER = {
+    'eng': 50259,  # English (Ugandan)
+    'ach': 50357,  # Acholi
+    'lgg': 50356,  # Lugbara
+    'lug': 50355,  # Luganda
+    'nyn': 50354,  # Runyankole
+    'teo': 50353,  # Ateso
+}
+
+# Get some test audio
+ds = datasets.load_dataset('Sunbird/salt', 'multispeaker-lug', split='test')
+audio = ds[0]['audio']
+sample_rate = ds[0]['sample_rate']
+
+# Specify a language from one of the above.
+lang = 'lug'
+
+# Apply the model
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+input_features = processor(
+    audio, sampling_rate=sample_rate, return_tensors="pt").input_features
+input_features = input_features.to(device)
+predicted_ids = model.to(device).generate(
+    input_features,
+    # Optionally set language=None here instead to auto-detect.
+    language=processor.tokenizer.decode(SALT_LANGUAGE_TOKENS_WHISPER[lang]),
+    forced_decoder_ids=None)
+transcription = processor.batch_decode(predicted_ids, skip_special_tokens=True)
+
+print(transcription)
+# Ekikoola kya kasooli kya kyenvu wabula langi yaakyo etera okuba eya kitaka wansi.
 ```
+
+## MMS speech recognition for Ugandan languages
+
+This is a fine-tuned version of [facebook/mms-1b-all](https://huggingface.co/facebook/mms-1b-all)
+for Ugandan languages, trained with the [SALT](https://huggingface.co/datasets/Sunbird/salt) dataset. The languages supported are:
+
+| code | language |
+| --- | --- |
+| lug | Luganda |
+| ach | Acholi |
+| lgg | Lugbara |
+| teo | Ateso |
+| nyn | Runyankole |
+| eng | English (Ugandan) |
+
+For each  language there are two adapters: one optimised for cases where the speech is only in that language,
+and another in which code-switching with English is expected.
+
+### Usage
+
+Usage is the same as the base model, though with different adapters available.
+
+```python
+import torch
+import transformers
+import datasets
+
+# Available adapters:
+# ['lug', 'lug+eng', 'ach', 'ach+eng', 'lgg', 'lgg+eng',
+#  'nyn', 'nyn+eng', 'teo', 'teo+eng']
+language = 'lug'
+
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+model = transformers.Wav2Vec2ForCTC.from_pretrained(
+    'Sunbird/asr-mms-salt').to(device)
+model.load_adapter(language)
+
+processor = transformers.Wav2Vec2Processor.from_pretrained(
+    'Sunbird/asr-mms-salt')
+processor.tokenizer.set_target_lang(language)
+
+# Get some test audio
+ds = datasets.load_dataset('Sunbird/salt', 'multispeaker-lug', split='test')
+audio = ds[0]['audio']
+sample_rate = ds[0]['sample_rate']
+
+# Apply the model
+inputs = processor(audio, sampling_rate=sample_rate, return_tensors="pt")
+
+with torch.no_grad():
+    outputs = model(**inputs.to(device)).logits
+
+ids = torch.argmax(outputs, dim=-1)[0]
+transcription = processor.decode(ids)
+
+print(transcription)
+# ekikola ky'akasooli kyakyenvu wabula langi yakyo etera okuba eyaakitaka wansi
+```
+
+The output of this model is unpunctuated and lower case. For applications requiring formatted text, an alternative model is [Sunbird/asr-whisper-large-v2-salt](https://huggingface.co/Sunbird/asr-whisper-large-v2-salt).
