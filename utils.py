@@ -23,13 +23,15 @@ def single_batch_entry(func):
         return result
     return single_batch_entry
 
-def show_dataset(ds, N=10, rate=16_000, audio_features=[]):
+def show_dataset(ds, N=10, rate=16_000, audio_features=[], normalize_audio=True):
     '''Show dataset inside a Jupyter notebook with embedded audio.'''
     def create_audio_player_from_array(audio_data):   
         if isinstance(audio_data, dict) and 'array' in audio_data:
-            audio_player = display.Audio(data=audio_data['array'], rate=rate)
+            audio_player = display.Audio(
+                data=audio_data['array'], rate=rate, normalize=normalize_audio)
         else:
-            audio_player = display.Audio(data=audio_data, rate=rate)
+            audio_player = display.Audio(
+                data=audio_data, rate=rate, normalize=normalize_audio)
         return audio_player._repr_html_().replace('\n', '')
 
     df_audio = pd.DataFrame(ds.take(N))
