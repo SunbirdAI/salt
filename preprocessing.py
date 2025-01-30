@@ -97,6 +97,17 @@ def match_target_sentence_format_to_source(r, src_or_tgt):
     return r
 
 @single_batch_entry
+def ensure_text_ends_with_punctuation(r, src_or_tgt):
+    '''Add a full stop to the end of text, if it doesn't end with punctuation.'''
+    punct = list(string.punctuation)
+    input_string = r[src_or_tgt]
+    if len(input_string):
+        if input_string[-1] not in punct:
+            input_string += '.'
+        r[src_or_tgt] = input_string
+    return r
+
+@single_batch_entry
 def clean_text(r, src_or_tgt, **clean_text_args):
     r[src_or_tgt] = cleantext.clean(
         r[src_or_tgt], to_ascii=False, lower=False, **clean_text_args)
@@ -219,13 +230,10 @@ class NoiseAugmenter:
 def normalize_audio(r, src_or_tgt):
     '''Normalize audio to zero mean and max magnitude of 1.0.'''
     x = r[src_or_tgt]
-    
     x = x - np.mean(x)
     max_before = np.max(np.abs(x))
-    #x = x / (np.percentile(np.abs(x), 99) + 1e-3)
     x = x / (np.max(np.abs(x)) + 1e-3)
     max_after = np.max(np.abs(x))
-    print(max_before, max_after)
     r[src_or_tgt] = x
     return r
 
