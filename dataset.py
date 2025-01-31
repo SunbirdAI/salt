@@ -342,9 +342,18 @@ def _matching_pairs(row, config):
             yield example
     
 
-def _create_generator(config):
+def _create_generator(config, verbose=False):
     '''Make a generator that yields examples according to dataset spec.'''    
     huggingface_datasets = _load_huggingface_datasets(config)
+
+    if verbose:
+        total_row_count = 0
+        for ds, id in huggingface_datasets:
+            row_count = len(ds)
+            total_row_count += row_count
+            print(f'{id}: {row_count} rows')
+        print(f'Total rows: {total_row_count}')
+    
     # TODO: interleave datasets here, if the config has shuffled=True.
     # joined dataset lengths have to be estimated, others are known.
     # Mix proportionately: generate one big permutation?
@@ -453,7 +462,7 @@ def _build_preprocessing_functions(config):
     ])
     return combined_fn
     
-def create(config):
+def create(config, verbose=False):
     """
     Create a dataset from the given configuration.
 
@@ -492,7 +501,7 @@ def create(config):
                 'A list of languages has been specified in config as a string: '
                 f'{language}. Change to [{language}] to make it a list.')
             
-    generator_function = lambda: _create_generator(config)
+    generator_function = lambda: _create_generator(config, verbose=verbose)
     ds = datasets.IterableDataset.from_generator(generator_function)
     
     # The individual datasets are already shuffled as needed, but do a little

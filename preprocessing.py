@@ -37,8 +37,10 @@ import string
 import random
 import cleantext
 import functools
+from functools import lru_cache
 import numpy as np
 import librosa
+import datasets
 import nlpaug.augmenter.word as naw
 import nlpaug.augmenter.char as nac
 import nlpaug.augmenter.audio as naa
@@ -95,6 +97,17 @@ def match_target_sentence_format_to_source(r, src_or_tgt):
     return r
 
 @single_batch_entry
+def ensure_text_ends_with_punctuation(r, src_or_tgt):
+    '''Add a full stop to the end of text, if it doesn't end with punctuation.'''
+    punct = list(string.punctuation)
+    input_string = r[src_or_tgt]
+    if len(input_string):
+        if input_string[-1] not in punct:
+            input_string += '.'
+        r[src_or_tgt] = input_string
+    return r
+
+@single_batch_entry
 def clean_text(r, src_or_tgt, **clean_text_args):
     r[src_or_tgt] = cleantext.clean(
         r[src_or_tgt], to_ascii=False, lower=False, **clean_text_args)
@@ -146,7 +159,7 @@ def augment_words(r, src_or_tgt, **word_augmentation_params):
     return r
 
 @single_batch_entry
-def augment_audio_speed(r, src_or_tgt, p=0.5, low=0.95, high=1.25):
+def augment_audio_speed(r, src_or_tgt, p=0.5, low=0.95, high=1.15):
     '''Change the speed of an audio sample randomly.
     
     Args:
@@ -174,19 +187,78 @@ def augment_audio_speed(r, src_or_tgt, p=0.5, low=0.95, high=1.25):
         
     return r
     
+
+class NoiseAugmenter:
+    """Class to handle noise augmentation with lazy loading of noise datasets."""
     
+    _instance = None
+    _noise_dataset = None
+    _noise_repo_config = None
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(NoiseAugmenter, cls).__new__(cls)
+        return cls._instance
+    
+    @classmethod
+    def get_noise_dataset(cls, noise_audio_repo):
+        """Lazy load the noise dataset only when needed."""
+        # Convert dict to frozen set of items for hashability
+        config_items = frozenset(noise_audio_repo.items())
+        
+        # If config changed, invalidate cached dataset
+        if cls._noise_repo_config != config_items:
+            cls._noise_dataset = None
+            cls._noise_repo_config = config_items
+        
+        # Load dataset if not already loaded
+        if cls._noise_dataset is None:
+            # Get the dataset and the specific split
+            dataset = datasets.load_dataset(**noise_audio_repo)
+            # If split was specified in noise_audio_repo, it's already the right split
+            # Otherwise, get the default split ('train' if available, otherwise first split)
+            if 'split' not in noise_audio_repo:
+                split = 'train' if 'train' in dataset else list(dataset.keys())[0]
+                cls._noise_dataset = dataset[split]
+            else:
+                cls._noise_dataset = dataset
+            
+        return cls._noise_dataset
+
+
+@single_batch_entry
+def normalize_audio(r, src_or_tgt):
+    '''Normalize audio to zero mean and max magnitude of 1.0.'''
+    x = r[src_or_tgt]
+    x = x - np.mean(x)
+    max_before = np.max(np.abs(x))
+    x = x / (np.max(np.abs(x)) + 1e-3)
+    max_after = np.max(np.abs(x))
+    r[src_or_tgt] = x
+    return r
+
+
 @single_batch_entry
 def augment_audio_noise(r, 
                         src_or_tgt,
-                        max_relative_amplitude = .5,
-                        max_coverage = .6,
-                        min_coverage = .1):
+                        p=1.0,
+                        noise_audio_repo=None,
+                        max_relative_amplitude=.9,
+                        max_coverage=1.0,
+                        min_coverage=0.4):
     '''Add random noise to an audio sample.
     
     Args:
         r: dictionary containing fields of a single dataset row.
         src_or_tgt: str, key such that r[src_or_tgt] contains the audio array
             to be augmented.
+        p: float, probability that the augmentation is applied, in range (0,1)
+        noise_audio_repo: if None (default) then use synthetic white noise.
+            Otherwise, if this contains a dict of valid kwargs for 
+            `datasets.load_dataset()`, e.g.
+            `{path='Sunbird/urban-noise', subset='small', split='train'}`,
+            then noise audio will be randomly sampled from this repository.
+            Assume the dataset has an `audio` feature.
         max_relative_amplitude: max noise amplitude relative to the largest
             value in the source array x. The value chosen is uniform in the
             range (0, max_amplitude_relative).
@@ -206,14 +278,44 @@ def augment_audio_noise(r,
     if not len(x):
         return r
 
-    x_max = np.amax(np.abs(x))
-    amplitude = np.random.uniform(0, max_relative_amplitude) * x_max
+    # Do nothing for a random proportion (1-p) of the inputs
+    if np.random.random() > p:
+        return r
+
+    x_reference_amplitude = np.percentile(np.abs(x), 99)
+    amplitude = np.random.uniform(0, max_relative_amplitude) * x_reference_amplitude
     coverage = np.random.uniform(min_coverage, max_coverage)
     num_samples_to_affect = int(len(x) * coverage)
     start_index = np.random.randint(0, len(x) - num_samples_to_affect)
-
-    # Generate noise of the determined amplitude
-    noise = np.random.uniform(0, amplitude, size=num_samples_to_affect)
+    
+    if noise_audio_repo is None:
+        # Use synthetic white noise
+        noise = np.random.uniform(-amplitude, amplitude, size=num_samples_to_affect)
+    else:
+        # Get the singleton instance and load dataset if needed
+        noise_augmenter = NoiseAugmenter()
+        noise_dataset = noise_augmenter.get_noise_dataset(noise_audio_repo)
+        
+        # Randomly select a noise sample
+        noise_idx = np.random.randint(0, noise_dataset.num_rows)
+        noise_sample = np.array(noise_dataset[noise_idx]['audio']['array'])
+        
+        # If noise sample is too short, repeat it
+        if len(noise_sample) < num_samples_to_affect:
+            repeats = int(np.ceil(num_samples_to_affect / len(noise_sample)))
+            noise_sample = np.tile(noise_sample, repeats)
+            
+        # If noise sample is too long, take a random segment
+        if len(noise_sample) > num_samples_to_affect:
+            noise_start = np.random.randint(0, len(noise_sample) - num_samples_to_affect)
+            noise_sample = noise_sample[noise_start:noise_start + num_samples_to_affect]
+            
+        # Normalize noise amplitude
+        noise_max = np.amax(np.abs(noise_sample))
+        if noise_max > 0:  # Avoid division by zero
+            noise = (noise_sample / noise_max) * amplitude
+        else:
+            noise = np.zeros(num_samples_to_affect)
 
     # Apply noise to the chosen segment
     x_with_noise = np.copy(x)  # Make a copy of x to prevent altering the original
