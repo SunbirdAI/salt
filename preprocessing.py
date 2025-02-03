@@ -231,9 +231,7 @@ def normalize_audio(r, src_or_tgt):
     '''Normalize audio to zero mean and max magnitude of 1.0.'''
     x = r[src_or_tgt]
     x = x - np.mean(x)
-    max_before = np.max(np.abs(x))
     x = x / (np.max(np.abs(x)) + 1e-3)
-    max_after = np.max(np.abs(x))
     r[src_or_tgt] = x
     return r
 
