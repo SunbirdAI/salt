@@ -390,7 +390,12 @@ def _create_generator(config, verbose=False):
         permutation = np.random.permutation(len(iterator_order))
         iterator_order = np.array(iterator_order)[permutation]                              
         for iterator_id in iterator_order:
-            batch = next(iterators[iterator_id])
+            try:
+                batch = next(iterators[iterator_id])
+            except Exception as e:
+                print('Error reading from ' + huggingface_datasets[iterator_id][1])
+                raise
+
             yield from _yield_matches(
                 batch, config, huggingface_datasets[iterator_id][1]) 
     else:
