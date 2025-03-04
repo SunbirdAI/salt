@@ -354,9 +354,6 @@ def _create_generator(config, verbose=False):
             print(f'{id}: {row_count} rows')
         print(f'Total rows: {total_row_count}')
     
-    # TODO: interleave datasets here, if the config has shuffled=True.
-    # joined dataset lengths have to be estimated, others are known.
-    # Mix proportionately: generate one big permutation?
     def _yield_matches(batch, config, dataset_id):
         keys = list(batch.keys())
         rows = [
