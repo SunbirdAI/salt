@@ -121,7 +121,11 @@ def clean_text(r, src_or_tgt, **clean_text_args):
     return r
 
 @single_batch_entry
-def augment_characters(r, src_or_tgt, avg_character_error_rate = 0.03):
+def augment_characters(r, src_or_tgt, avg_character_error_rate=0.03, p=0.5):
+    # Maybe do nothing
+    if np.random.random() > p:
+        return r
+
     # Define character set for random insertions
     chars = 'abcdefghijklmnopqrstuvwxyz'
 
