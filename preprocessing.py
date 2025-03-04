@@ -49,15 +49,22 @@ from .utils import single_batch_entry
 
 
 @single_batch_entry
-def random_case(r, src_or_tgt, p_all_lower_case=0.4, p_all_upper_case=0.03):
+def random_case(r, src_or_tgt, p_all_lower_case=0.4,
+                p_all_upper_case=0.03, apply_to_both=True):
     '''Augment text to be all lower case or all caps.'''
     if np.random.random() < p_all_upper_case:
-        r['source'] = r['source'].upper()
-        r['target'] = r['target'].upper()
+        if apply_to_both:
+            r['source'] = r['source'].upper()
+            r['target'] = r['target'].upper()
+        else:
+            r[src_or_tgt] = r[src_or_tgt].upper()
     # Lower case takes precedence
     if np.random.random() < p_all_lower_case:
-        r['source'] = r['source'].lower()
-        r['target'] = r['target'].lower()
+        if apply_to_both:
+            r['source'] = r['source'].lower()
+            r['target'] = r['target'].lower()
+        else:
+            r[src_or_tgt] = r[src_or_tgt].lower()
     return r
 
 @single_batch_entry
