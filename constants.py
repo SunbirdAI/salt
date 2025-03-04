@@ -11,7 +11,7 @@ SALT_LANGUAGE_NAMES = {
     'ttj': 'Rutooro',
     'kin': 'Kinyarwanda',
     'myx': 'Lumasaba',
-    'adh',  'Jopadhola',
+    'adh': 'Jopadhola',
     'alz': 'Alur',
     'bfa': 'Bari',
     'cgg': 'Rukiga',
@@ -37,7 +37,7 @@ SALT_LANGUAGE_NAMES = {
     'rwm': 'Kwamba',
     'sbx': 'Sebei',
     'soc': 'So',
-    'tlj': 'BwisiTalinga',
+    'tlj': 'Bwisi/Talinga',
     'nuj': 'Lunyole'
 }
 
