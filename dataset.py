@@ -265,6 +265,12 @@ def _matching_items(row, source_target_config, source_or_target):
                      'language': language,
                      'origin_dataset': row['origin_dataset'],
                     })
+            if source_or_target == 'source' and row.get(f'{language}_source_text'):
+                matches.append(
+                    {'text': row[f'{language}_source_text'],
+                     'language': language,
+                     'origin_dataset': row['origin_dataset'],
+                    })
             elif row.get(f'{language}_text'):
                 matches.append(
                     {'text': row[f'{language}_text'],
