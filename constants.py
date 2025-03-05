@@ -38,7 +38,8 @@ SALT_LANGUAGE_NAMES = {
     'sbx': 'Sebei',
     'soc': 'So',
     'tlj': 'Bwisi/Talinga',
-    'nuj': 'Lunyole'
+    'nuj': 'Lunyole',
+    'nyo': 'Runyoro',
 }
 
 SALT_LANGUAGE_TOKENS_WHISPER = {
