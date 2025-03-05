@@ -265,6 +265,12 @@ def _matching_items(row, source_target_config, source_or_target):
                      'language': language,
                      'origin_dataset': row['origin_dataset'],
                     })
+            if source_or_target == 'source' and row.get(f'{language}_source_text'):
+                matches.append(
+                    {'text': row[f'{language}_source_text'],
+                     'language': language,
+                     'origin_dataset': row['origin_dataset'],
+                    })
             elif row.get(f'{language}_text'):
                 matches.append(
                     {'text': row[f'{language}_text'],
@@ -354,9 +360,6 @@ def _create_generator(config, verbose=False):
             print(f'{id}: {row_count} rows')
         print(f'Total rows: {total_row_count}')
     
-    # TODO: interleave datasets here, if the config has shuffled=True.
-    # joined dataset lengths have to be estimated, others are known.
-    # Mix proportionately: generate one big permutation?
     def _yield_matches(batch, config, dataset_id):
         keys = list(batch.keys())
         rows = [
@@ -390,7 +393,12 @@ def _create_generator(config, verbose=False):
         permutation = np.random.permutation(len(iterator_order))
         iterator_order = np.array(iterator_order)[permutation]                              
         for iterator_id in iterator_order:
-            batch = next(iterators[iterator_id])
+            try:
+                batch = next(iterators[iterator_id])
+            except Exception as e:
+                print('Error reading from ' + huggingface_datasets[iterator_id][1])
+                raise
+
             yield from _yield_matches(
                 batch, config, huggingface_datasets[iterator_id][1]) 
     else:

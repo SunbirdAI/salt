@@ -48,14 +48,15 @@ class TestPreprocessing(unittest.TestCase):
     def test_random_case(self):
         record = {'source': ['Some words'], 'target': ['translated']}
         result = preprocessing.random_case(
-            record, 'source', p_all_lower_case=0.0, p_all_upper_case=1.0)
+            record, 'source', p_all_lower_case=0.0, p_all_upper_case=1.0,
+            apply_to_both=True)
         self.assertEqual(result['source'], ['SOME WORDS'])
         self.assertEqual(result['target'], ['TRANSLATED'])
         
     def test_augment_characters(self):
         record = {'source': ['This is some sample source text']}
         result = preprocessing.augment_characters(
-            record, 'source', avg_character_error_rate = 0.5)
+            record, 'source', avg_character_error_rate=0.5, p=1.0)
         # Check that augmentation occurred
         self.assertNotEqual(result['source'], record['source'])
 

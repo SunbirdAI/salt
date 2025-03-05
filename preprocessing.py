@@ -49,15 +49,22 @@ from .utils import single_batch_entry
 
 
 @single_batch_entry
-def random_case(r, src_or_tgt, p_all_lower_case=0.4, p_all_upper_case=0.03):
+def random_case(r, src_or_tgt, p_all_lower_case=0.4,
+                p_all_upper_case=0.03, apply_to_both=True):
     '''Augment text to be all lower case or all caps.'''
     if np.random.random() < p_all_upper_case:
-        r['source'] = r['source'].upper()
-        r['target'] = r['target'].upper()
+        if apply_to_both:
+            r['source'] = r['source'].upper()
+            r['target'] = r['target'].upper()
+        else:
+            r[src_or_tgt] = r[src_or_tgt].upper()
     # Lower case takes precedence
     if np.random.random() < p_all_lower_case:
-        r['source'] = r['source'].lower()
-        r['target'] = r['target'].lower()
+        if apply_to_both:
+            r['source'] = r['source'].lower()
+            r['target'] = r['target'].lower()
+        else:
+            r[src_or_tgt] = r[src_or_tgt].lower()
     return r
 
 @single_batch_entry
@@ -114,7 +121,11 @@ def clean_text(r, src_or_tgt, **clean_text_args):
     return r
 
 @single_batch_entry
-def augment_characters(r, src_or_tgt, avg_character_error_rate = 0.03):
+def augment_characters(r, src_or_tgt, avg_character_error_rate=0.03, p=0.5):
+    # Maybe do nothing
+    if np.random.random() > p:
+        return r
+
     # Define character set for random insertions
     chars = 'abcdefghijklmnopqrstuvwxyz'
 
@@ -231,9 +242,7 @@ def normalize_audio(r, src_or_tgt):
     '''Normalize audio to zero mean and max magnitude of 1.0.'''
     x = r[src_or_tgt]
     x = x - np.mean(x)
-    max_before = np.max(np.abs(x))
     x = x / (np.max(np.abs(x)) + 1e-3)
-    max_after = np.max(np.abs(x))
     r[src_or_tgt] = x
     return r
 
