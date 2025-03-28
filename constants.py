@@ -37,9 +37,10 @@ SALT_LANGUAGE_NAMES = {
     'rwm': 'Kwamba',
     'sbx': 'Sebei',
     'soc': 'So',
-    'tlj': 'Bwisi/Talinga',
+    'tlj': 'Bwisi-Talinga',
     'nuj': 'Lunyole',
     'nyo': 'Runyoro',
+    'luo': 'Luo',
 }
 
 SALT_LANGUAGE_TOKENS_WHISPER = {
