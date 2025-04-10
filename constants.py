@@ -27,7 +27,6 @@ SALT_LANGUAGE_NAMES = {
     'lsm': 'Samia',
     'lth': 'Thur',
     'luc': 'Aringa',
-    'lug': 'Luganda',
     'lzm': 'Lulubo',
     'mhi': 'Ma\'di',
     'ndp': 'Ndo',
