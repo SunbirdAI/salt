@@ -29,7 +29,7 @@ SALT_LANGUAGE_NAMES = {
     'luc': 'Aringa',
     'lzm': 'Lulubo',
     'mhi': 'Ma\'di',
-    'ndp': 'Ndo',
+    'ndp': 'Kebu', #replacing Ndo with Kebu
     'pok': 'Pokot',
     'rub': 'Lugungu',
     'ruc': 'Ruruuli',
