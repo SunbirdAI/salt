@@ -5,6 +5,7 @@ import functools
 import time
 import types
 import heapq
+import random
 import numpy as np
 import threading
 
@@ -316,7 +317,14 @@ def _matching_pairs(row, config):
     
     source_items = _matching_items(row, config['source'], 'source')
     target_items = _matching_items(row, config['target'], 'target')
-    
+
+    remove_reverse_duplicates = config.get('no_reverse_duplicate_examples')
+    if remove_reverse_duplicates:
+        random.shuffle(source_items)
+        random.shuffle(target_items)
+
+    processed_language_pairs = set()
+
     for source in source_items:
         for target in target_items:
             example = {}
@@ -344,7 +352,13 @@ def _matching_pairs(row, config):
                 if not (example['source.language'] == required_language or
                         example['target.language'] == required_language):
                     continue
-                
+
+            lang_pair = frozenset([example['source.language'], example['target.language']])
+
+            if remove_reverse_duplicates and lang_pair in processed_language_pairs:
+                continue
+
+            processed_language_pairs.add(lang_pair)
             yield example
     
 

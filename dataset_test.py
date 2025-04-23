@@ -475,6 +475,29 @@ class DatasetTestCase(unittest.TestCase):
 
         self.assertCountEqual(list(ds), expected)
 
+    def test_no_reverse_dpulicates(self):        
+        yaml_config = '''
+        huggingface_load:
+          - path: csv
+            data_files: PATH/translation_dataset_a1k.csv
+            split: train
+        source:
+            type: text
+            language: [eng, lug]
+        target:
+            type: text
+            language: [eng, lug]
+        allow_same_src_and_tgt_language: False
+        no_reverse_duplicate_examples: True
+        '''.replace('PATH', self.data_path)
+
+        config = yaml.safe_load(yaml_config)
+        ds = dataset.create(config)
+        examples = list(ds)
+        self.assertEqual(len(examples), 1000)
+        source_languages = set([e['source.language'] for e in examples])
+        self.assertEqual(source_languages, set(['eng', 'lug']))
+
     def test_two_datasets_concatenated(self):        
         yaml_config = '''
         huggingface_load:
