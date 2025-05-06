@@ -40,7 +40,6 @@ SALT_LANGUAGE_NAMES = {
     'tlj': 'Bwisi-Talinga',
     'nuj': 'Lunyole',
     'nyo': 'Runyoro',
-    'luo': 'Luo',
 }
 
 SALT_LANGUAGE_TOKENS_WHISPER = {
