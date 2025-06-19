@@ -8,6 +8,7 @@ import heapq
 import random
 import numpy as np
 import threading
+import concurrent.futures
 
 from . import preprocessing
 
@@ -393,6 +394,7 @@ def _create_generator(config, verbose=False):
                 
     # PyArrow data should be read in batches for speed.
     PYARROW_BATCH_SIZE = 10
+    num_workers = config.get('num_workers', 4)
             
     if config.get('shuffle') and len(huggingface_datasets) > 1:
         # If there are multiple datasets concatenated and 'shuffle' is
@@ -405,20 +407,41 @@ def _create_generator(config, verbose=False):
                 len(huggingface_datasets[i][0]) / PYARROW_BATCH_SIZE)
             iterator_order.extend([i] * num_batches)
         permutation = np.random.permutation(len(iterator_order))
-        iterator_order = np.array(iterator_order)[permutation]                              
-        for iterator_id in iterator_order:
-            try:
-                batch = next(iterators[iterator_id])
-            except Exception as e:
-                print('Error reading from ' + huggingface_datasets[iterator_id][1])
-                raise
-
-            yield from _yield_matches(
-                batch, config, huggingface_datasets[iterator_id][1]) 
+        iterator_order = np.array(iterator_order)[permutation]
+        def process_batch(args):
+            batch, config, dataset_id = args
+            return list(_yield_matches(batch, config, dataset_id))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
+            future_list = []
+            for iterator_id in iterator_order:
+                try:
+                    batch = next(iterators[iterator_id])
+                except Exception as e:
+                    print('Error reading from ' + huggingface_datasets[iterator_id][1])
+                    raise
+                future = executor.submit(process_batch, (batch, config, huggingface_datasets[iterator_id][1]))
+                future_list.append(future)
+            for future in future_list:
+                for match in future.result():
+                    yield match
+    elif config.get('shuffle'):
+        # Single dataset, shuffle is True: parallelize batches, order doesn't matter
+        def process_batch(args):
+            batch, config, dataset_id = args
+            return list(_yield_matches(batch, config, dataset_id))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
+            futures = []
+            for ds, dataset_id in huggingface_datasets:  
+                for batch in ds.iter(batch_size=PYARROW_BATCH_SIZE): 
+                    futures.append(executor.submit(process_batch, (batch, config, dataset_id)))
+            for future in concurrent.futures.as_completed(futures):
+                for match in future.result():
+                    yield match
     else:
+        # No shuffle: preserve strict order, process sequentially
         for ds, dataset_id in huggingface_datasets:  
             for batch in ds.iter(batch_size=PYARROW_BATCH_SIZE): 
-                yield from _yield_matches(batch, config, dataset_id)                                
+                yield from _yield_matches(batch, config, dataset_id)
                 
 def _compose(functions):
     def inner(arg):
