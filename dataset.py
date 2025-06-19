@@ -9,6 +9,7 @@ import random
 import numpy as np
 import threading
 import concurrent.futures
+import queue
 
 from . import preprocessing
 
@@ -411,19 +412,37 @@ def _create_generator(config, verbose=False):
         def process_batch(args):
             batch, config, dataset_id = args
             return list(_yield_matches(batch, config, dataset_id))
+        prefetch_limit = 4 * num_workers
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
-            future_list = []
-            for iterator_id in iterator_order:
+            future_queue = queue.Queue()
+            iterator_order_iter = iter(iterator_order)
+            # Prefill the queue
+            for _ in range(prefetch_limit):
                 try:
+                    iterator_id = next(iterator_order_iter)
                     batch = next(iterators[iterator_id])
+                    future = executor.submit(process_batch, (batch, config, huggingface_datasets[iterator_id][1]))
+                    future_queue.put((future, iterator_id))
+                except StopIteration:
+                    break
                 except Exception as e:
                     print('Error reading from ' + huggingface_datasets[iterator_id][1])
                     raise
-                future = executor.submit(process_batch, (batch, config, huggingface_datasets[iterator_id][1]))
-                future_list.append(future)
-            for future in future_list:
+            while not future_queue.empty():
+                future, iterator_id = future_queue.get()
                 for match in future.result():
                     yield match
+                # Submit the next batch if available
+                try:
+                    iterator_id = next(iterator_order_iter)
+                    batch = next(iterators[iterator_id])
+                    next_future = executor.submit(process_batch, (batch, config, huggingface_datasets[iterator_id][1]))
+                    future_queue.put((next_future, iterator_id))
+                except StopIteration:
+                    continue
+                except Exception as e:
+                    print('Error reading from ' + huggingface_datasets[iterator_id][1])
+                    raise
     elif config.get('shuffle'):
         # Single dataset, shuffle is True: parallelize batches, order doesn't matter
         def process_batch(args):
