@@ -56,6 +56,7 @@ SALT_LANGUAGE_TOKENS_WHISPER = {
     'ttj': 50351,
     'kin': 50350,
     'myx': 50349,
+    'kik': 50348,
 }
 
 SALT_LANGUAGE_TOKENS_NLLB_TRANSLATION = {
