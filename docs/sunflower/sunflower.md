@@ -140,11 +140,20 @@ Professional endpoint for multilingual chat completions with full conversation m
 
 ### 2. Simple Inference Endpoint
 
-**Endpoint:** `POST /ug40_simple`
+**Endpoint:** `POST /tasks/ug40_simple`
 
 Simplified interface for single instruction/response interactions.
 
 #### Request Format (Form Data)
+
+```json
+{
+  "instruction": "Translate 'Good morning' to Luganda",
+  "model_type": "qwen",
+  "temperature": 0.3,
+  "system_message": "You are Sunflower, a multilingual assistant for Ugandan languages made by Sunbird AI."
+}
+```
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -233,7 +242,7 @@ The API uses standard HTTP status codes and provides detailed error messages.
 import requests
 import json
 
-def chat_with_sunflower(messages, api_key, base_url="https://api.sunbirdai"):
+def chat_with_sunflower(messages, api_key, base_url="https://api.sunbird.ai"):
     """
     Send a chat completion request to Sunflower API
     """
@@ -289,7 +298,7 @@ def simple_inference(instruction, api_key, base_url="https://api.sunbird.ai"):
     """
     Send a simple inference request to Sunflower API
     """
-    url = f"{base_url}/ug40_simple"
+    url = f"{base_url}/tasks/ug40_simple"
     
     headers = {
         "Authorization": f"Bearer {api_key}"
@@ -545,7 +554,7 @@ const FormData = require('form-data');
 const axios = require('axios');
 
 async function simpleInference(instruction, apiKey, baseUrl = 'https://api.sunbird.ai') {
-    const url = `${baseUrl}/ug40_simple`;
+    const url = `${baseUrl}/tasks/ug40_simple`;
     
     const formData = new FormData();
     formData.append('instruction', instruction);
@@ -608,7 +617,7 @@ curl -X POST "https://api.sunbird.ai/tasks/ug40_inference" \
 #### 2. Simple Inference
 
 ```bash
-curl -X POST "https://api.sunbird.ai/ug40_simple" \
+curl -X POST "https://api.sunbird.ai/tasks/ug40_simple" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -F "instruction=What are some traditional Ugandan foods?" \
   -F "model_type=qwen" \
