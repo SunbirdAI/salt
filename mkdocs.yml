@@ -172,6 +172,9 @@ markdown_extensions:
 
 nav:
   - SALT: index.md
+  - Sunflower:
+      - "Docs": sunflower/docs.md
+      
   - Getting Started:
       - "Introduction": tutorials/01-introduction.md
       - "Installation": tutorials/02-installation.md
