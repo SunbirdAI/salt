@@ -41,7 +41,7 @@ The Sunflower API provides access to Sunbird AI's multilingual language model, s
 
 - **Primary Model:** Sunbird/Sunflower-14B-FP8
 - **Supported Languages:** Luganda, Acholi, Ateso, English, and other Ugandan languages
-- **Model Types:** Qwen (default), Gemma
+- **Model Types:** Qwen
 
 ---
 
@@ -66,18 +66,13 @@ The API implements rate limiting based on account types:
 - **Professional:** Higher rate limits
 - **Enterprise:** Custom rate limits
 
-Rate limit information is included in response headers:
-- `X-RateLimit-Limit`: Maximum requests allowed
-- `X-RateLimit-Remaining`: Remaining requests in current window
-- `X-RateLimit-Reset`: Time when the rate limit resets
-
 ---
 
 ## API Endpoints
 
 ### 1. Chat Completions Endpoint
 
-**Endpoint:** `POST /ug40_inference`
+**Endpoint:** `POST tasks/ug40_inference`
 
 Professional endpoint for multilingual chat completions with full conversation management.
 
@@ -238,11 +233,11 @@ The API uses standard HTTP status codes and provides detailed error messages.
 import requests
 import json
 
-def chat_with_sunflower(messages, api_key, base_url="https://api.sunbirdai.com"):
+def chat_with_sunflower(messages, api_key, base_url="https://api.sunbirdai"):
     """
     Send a chat completion request to Sunflower API
     """
-    url = f"{base_url}/ug40_inference"
+    url = f"{base_url}/tasks/ug40_inference"
     
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -290,7 +285,7 @@ if result:
 ```python
 import requests
 
-def simple_inference(instruction, api_key, base_url="https://api.sunbirdai.com"):
+def simple_inference(instruction, api_key, base_url="https://api.sunbird.ai"):
     """
     Send a simple inference request to Sunflower API
     """
@@ -328,7 +323,7 @@ if result:
 
 ```python
 class SunflowerConversation:
-    def __init__(self, api_key, base_url="https://api.sunbirdai.com"):
+    def __init__(self, api_key, base_url="https://api.sunbird.ai"):
         self.api_key = api_key
         self.base_url = base_url
         self.messages = []
@@ -346,7 +341,7 @@ class SunflowerConversation:
     
     def get_response(self, model_type="qwen", temperature=0.3):
         """Get AI response and add it to conversation"""
-        url = f"{self.base_url}/ug40_inference"
+        url = f"{self.base_url}/tasks/ug40_inference"
         
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -411,12 +406,12 @@ def sunflower_request_with_retry(
     api_key, 
     max_retries=3,
     base_delay=2.0,
-    base_url="https://api.sunbirdai.com"
+    base_url="https://api.sunbird.ai"
 ) -> Optional[dict]:
     """
     Make a request to Sunflower API with exponential backoff retry
     """
-    url = f"{base_url}/ug40_inference"
+    url = f"{base_url}/tasks/ug40_inference"
     
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -490,8 +485,8 @@ if result:
 ```javascript
 const axios = require('axios');
 
-async function chatWithSunflower(messages, apiKey, baseUrl = 'https://api.sunbirdai.com') {
-    const url = `${baseUrl}/ug40_inference`;
+async function chatWithSunflower(messages, apiKey, baseUrl = 'https://api.sunbird.ai') {
+    const url = `${baseUrl}/tasks/ug40_inference`;
     
     const headers = {
         'Authorization': `Bearer ${apiKey}`,
@@ -549,7 +544,7 @@ chatWithSunflower(messages, apiKey)
 const FormData = require('form-data');
 const axios = require('axios');
 
-async function simpleInference(instruction, apiKey, baseUrl = 'https://api.sunbirdai.com') {
+async function simpleInference(instruction, apiKey, baseUrl = 'https://api.sunbird.ai') {
     const url = `${baseUrl}/ug40_simple`;
     
     const formData = new FormData();
@@ -591,7 +586,7 @@ simpleInference(instruction, apiKey)
 #### 1. Chat Completion
 
 ```bash
-curl -X POST "https://api.sunbirdai.com/ug40_inference" \
+curl -X POST "https://api.sunbird.ai/tasks/ug40_inference" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -613,7 +608,7 @@ curl -X POST "https://api.sunbirdai.com/ug40_inference" \
 #### 2. Simple Inference
 
 ```bash
-curl -X POST "https://api.sunbirdai.com/ug40_simple" \
+curl -X POST "https://api.sunbird.ai/ug40_simple" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -F "instruction=What are some traditional Ugandan foods?" \
   -F "model_type=qwen" \
@@ -723,16 +718,8 @@ curl -X POST "https://api.sunbirdai.com/ug40_simple" \
 
 ### Getting Help
 
-- **Email Support:** support@sunbirdai.com
-- **Documentation:** https://docs.sunbirdai.com
-- **Status Page:** https://status.sunbirdai.com
-
-### Additional Resources
-
-- **Model Documentation:** Technical details about Sunflower models
-- **Language Support:** Complete list of supported Ugandan languages
-- **Use Cases:** Examples and case studies
-- **API Updates:** Changelog and version history
+- **Email Support:** info@sunbird.ai
+- **Documentation:** https://salt.sunbird.ai/docs
 
 ---
 
