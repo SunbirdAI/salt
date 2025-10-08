@@ -178,9 +178,19 @@ nav:
       # - "Quick Tour": tutorials/03-quick-tour.md
   - Sunflower:
       - API:
-          - "Getting started": sunflower/sunflower.md
+          - "Getting Started": sunflower/sunflower.md
+      - Architecture:
+          - "Model Overview": sunflower/model_overview.md
+          - "Training and Fine-tuning": sunflower/training.md
       - Quantization:
           - "LoRA Fine-tuned Models to GGUF": sunflower/quantization.md
+      - Inference:
+          - "Running Locally": sunflower/inference_local.md
+          - "Using Cloud API": sunflower/inference_cloud.md
+      - Evaluation:
+          - "Benchmarks and Results": sunflower/benchmarks.md
+          - "Prompt Examples": sunflower/prompts.md
+
 
   - Tutorials:
       - Beginner:
