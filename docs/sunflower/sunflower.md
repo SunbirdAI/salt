@@ -72,7 +72,7 @@ The API implements rate limiting based on account types:
 
 ### 1. Chat Completions Endpoint
 
-**Endpoint:** `POST tasks/ug40_inference`
+**Endpoint:** `POST tasks/sunflower_inference`
 
 Professional endpoint for multilingual chat completions with full conversation management.
 
@@ -140,7 +140,7 @@ Professional endpoint for multilingual chat completions with full conversation m
 
 ### 2. Simple Inference Endpoint
 
-**Endpoint:** `POST /tasks/ug40_simple`
+**Endpoint:** `POST /tasks/sunflower_simple`
 
 Simplified interface for single instruction/response interactions.
 
@@ -246,7 +246,7 @@ def chat_with_sunflower(messages, api_key, base_url="https://api.sunbird.ai"):
     """
     Send a chat completion request to Sunflower API
     """
-    url = f"{base_url}/tasks/ug40_inference"
+    url = f"{base_url}/tasks/sunflower_inference"
     
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -298,7 +298,7 @@ def simple_inference(instruction, api_key, base_url="https://api.sunbird.ai"):
     """
     Send a simple inference request to Sunflower API
     """
-    url = f"{base_url}/tasks/ug40_simple"
+    url = f"{base_url}/tasks/sunflower_simple"
     
     headers = {
         "Authorization": f"Bearer {api_key}"
@@ -350,7 +350,7 @@ class SunflowerConversation:
     
     def get_response(self, model_type="qwen", temperature=0.3):
         """Get AI response and add it to conversation"""
-        url = f"{self.base_url}/tasks/ug40_inference"
+        url = f"{self.base_url}/tasks/sunflower_inference"
         
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -420,7 +420,7 @@ def sunflower_request_with_retry(
     """
     Make a request to Sunflower API with exponential backoff retry
     """
-    url = f"{base_url}/tasks/ug40_inference"
+    url = f"{base_url}/tasks/sunflower_inference"
     
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -495,7 +495,7 @@ if result:
 const axios = require('axios');
 
 async function chatWithSunflower(messages, apiKey, baseUrl = 'https://api.sunbird.ai') {
-    const url = `${baseUrl}/tasks/ug40_inference`;
+    const url = `${baseUrl}/tasks/sunflower_inference`;
     
     const headers = {
         'Authorization': `Bearer ${apiKey}`,
@@ -554,7 +554,7 @@ const FormData = require('form-data');
 const axios = require('axios');
 
 async function simpleInference(instruction, apiKey, baseUrl = 'https://api.sunbird.ai') {
-    const url = `${baseUrl}/tasks/ug40_simple`;
+    const url = `${baseUrl}/tasks/sunflower_simple`;
     
     const formData = new FormData();
     formData.append('instruction', instruction);
@@ -595,7 +595,7 @@ simpleInference(instruction, apiKey)
 #### 1. Chat Completion
 
 ```bash
-curl -X POST "https://api.sunbird.ai/tasks/ug40_inference" \
+curl -X POST "https://api.sunbird.ai/tasks/sunflower_inference" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -617,7 +617,7 @@ curl -X POST "https://api.sunbird.ai/tasks/ug40_inference" \
 #### 2. Simple Inference
 
 ```bash
-curl -X POST "https://api.sunbird.ai/tasks/ug40_simple" \
+curl -X POST "https://api.sunbird.ai/tasks/sunflower_simple" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -F "instruction=What are some traditional Ugandan foods?" \
   -F "model_type=qwen" \

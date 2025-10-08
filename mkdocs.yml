@@ -172,13 +172,12 @@ markdown_extensions:
 
 nav:
   - SALT: index.md
-  - Sunflower:
-      - "Docs": sunflower/sunflower.md
-      
   - Getting Started:
       - "Introduction": tutorials/01-introduction.md
       - "Installation": tutorials/02-installation.md
       # - "Quick Tour": tutorials/03-quick-tour.md
+  - Sunflower:
+      - "Docs": sunflower/sunflower.md
   - Tutorials:
       - Beginner:
           - "Basics": tutorials/04-basics.md
