@@ -241,9 +241,8 @@ sf.write("output.wav", wav_np, 16000)
 
 ## Resources
 
-- Original Repository: [https://github.com/SparkAudio/Spark-TTS](https://github.com/SparkAudio/Spark-TTS)
 - Audio Tokenizer: [https://huggingface.co/unsloth/Spark-TTS-0.5B](https://huggingface.co/unsloth/Spark-TTS-0.5B)
 - Customized Model: [https://huggingface.co/jq/spark-tts-salt](https://huggingface.co/jq/spark-tts-salt)
-- Example Colab: The original notebook is from [https://colab.research.google.com/drive/1cUrPBJeGj7nRadAtQ4Fx8-5uOa2YYCE7](https://colab.research.google.com/drive/1cUrPBJeGj7nRadAtQ4Fx8-5uOa2YYCE7)
+- Example Colab: The original notebook is from [https://colab.research.google.com/drive/1cUrPBJeGj7nRadAtQ4Fx8-5uOa2YYCE7?usp=sharing#scrollTo=be345faf-4a72-42f5-8413-5e4a808d47f3](https://colab.research.google.com/drive/1cUrPBJeGj7nRadAtQ4Fx8-5uOa2YYCE7?usp=sharing#scrollTo=be345faf-4a72-42f5-8413-5e4a808d47f3)
 
 For contributions or issues, refer to the GitHub repo. This model supports open-source TTS research for underrepresented languages.
