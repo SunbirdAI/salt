@@ -180,6 +180,7 @@ nav:
       - API:
           - "Getting started": sunflower/sunflower.md
       - Quantization:
+          - "Overview": sunflower/overview.md
           - "LoRA Fine-tuned Models to GGUF": sunflower/quantization.md
 
   - Tutorials:
