@@ -2,78 +2,94 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://salt.sunbird.ai/</loc>
-         <lastmod>2025-10-08</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://salt.sunbird.ai/reference/</loc>
-         <lastmod>2025-10-08</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://salt.sunbird.ai/API/</loc>
-         <lastmod>2025-10-08</lastmod>
+         <lastmod>2025-10-15</lastmod>
+    </url>
+    <url>
+         <loc>https://salt.sunbird.ai/API/index_v1/</loc>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://salt.sunbird.ai/blog/</loc>
-         <lastmod>2025-10-08</lastmod>
+         <lastmod>2025-10-15</lastmod>
+    </url>
+    <url>
+         <loc>https://salt.sunbird.ai/sunflower/llm_compression/</loc>
+         <lastmod>2025-10-15</lastmod>
+    </url>
+    <url>
+         <loc>https://salt.sunbird.ai/sunflower/overview/</loc>
+         <lastmod>2025-10-15</lastmod>
+    </url>
+    <url>
+         <loc>https://salt.sunbird.ai/sunflower/quantization/</loc>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://salt.sunbird.ai/sunflower/sunflower/</loc>
-         <lastmod>2025-10-08</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://salt.sunbird.ai/tutorials/01-introduction/</loc>
-         <lastmod>2025-10-08</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://salt.sunbird.ai/tutorials/02-installation/</loc>
-         <lastmod>2025-10-08</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://salt.sunbird.ai/tutorials/03-quick-tour/</loc>
-         <lastmod>2025-10-08</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://salt.sunbird.ai/tutorials/04-basics/</loc>
-         <lastmod>2025-10-08</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://salt.sunbird.ai/tutorials/05-data-exploration/</loc>
-         <lastmod>2025-10-08</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://salt.sunbird.ai/tutorials/07-speech-datasets/</loc>
-         <lastmod>2025-10-08</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://salt.sunbird.ai/tutorials/08-translation-models/</loc>
-         <lastmod>2025-10-08</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://salt.sunbird.ai/tutorials/09-asr-models/</loc>
-         <lastmod>2025-10-08</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://salt.sunbird.ai/tutorials/10-tts-models/</loc>
-         <lastmod>2025-10-08</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://salt.sunbird.ai/tutorials/11-data-loading/</loc>
-         <lastmod>2025-10-08</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://salt.sunbird.ai/tutorials/12-training/</loc>
-         <lastmod>2025-10-08</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://salt.sunbird.ai/tutorials/13-diarization/</loc>
-         <lastmod>2025-10-08</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://salt.sunbird.ai/tutorials/14-diarization-training/</loc>
-         <lastmod>2025-10-08</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://salt.sunbird.ai/tutorials/15-diarization-evaluation/</loc>
-         <lastmod>2025-10-08</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
 </urlset>
