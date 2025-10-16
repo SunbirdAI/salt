@@ -181,6 +181,7 @@ nav:
           - "Getting started": sunflower/sunflower.md
       - Quantization:
           - "Overview": sunflower/overview.md
+          - "inference": sunflower/inference.md
           - "LoRA Fine-tuned Models to GGUF": sunflower/quantization.md
 
   - Tutorials:
