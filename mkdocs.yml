@@ -191,7 +191,7 @@ nav:
       - SALT Models:
           - "Translation Models": tutorials/08-translation-models.md
           - "ASR Models": tutorials/09-asr-models.md
-          - "TTS Models": tutorials/10-tts-models.md
+          - "TTS Models": tutorials/10-tts-spark-models.md
       - SALT Pipelines:
           - "Data Loading": tutorials/11-data-loading.md
           - "Training": tutorials/12-training.md

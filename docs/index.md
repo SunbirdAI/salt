@@ -21,7 +21,7 @@ This documentation serves as the official guide for the [**SALT**](https://githu
     - [SALT Models](#salt-models)
         - [Translation Models](tutorials/08-translation-models.md)
         - [ASR Models](tutorials/09-asr-models.md)
-        - [TTS Models](tutorials/10-tts-models.md)
+        - [TTS Models](tutorials/10-tts-spark-models.md)
     - [SALT Pipelines](#salt-pipelines)
         - [Data Loading](tutorials/11-data-loading.md)
         - [Training](tutorials/12-training.md)
