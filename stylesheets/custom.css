@@ -1,0 +1,28 @@
+[data-md-color-primary=white] {
+    
+    --md-typeset-a-color: orange;
+}
+
+[data-md-color-accent=amber] {
+    --md-accent-fg-color: #ffaa28;;
+    --md-accent-fg-color--transparent: #ffaa001a;
+    --md-accent-bg-color: #000000de;
+    --md-accent-bg-color--light: #0000008a;
+}
+
+[data-md-color-scheme=slate][data-md-color-primary=black] {
+    --md-typeset-a-color: orange;
+}
+
+.md-footer-meta__inner {
+    display: none;
+}
+
+@media (max-width: 768px) { /* Adjust the breakpoint as needed */
+    .md-main div[class^="language-"] {
+    /*  padding: 0 1rem;  Applies only for devices with a width of 768px or less */
+      margin-left: 0;
+      margin-right: 0;
+    }
+  }
+  
