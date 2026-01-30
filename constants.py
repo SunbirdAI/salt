@@ -53,7 +53,7 @@ SALT_LANGUAGE_NAMES = {
     'dho': 'Dholuo',
     'din': 'Dinka',
     'ewe': 'Ewe',
-    'fro': 'French',
+    'fra': 'French',
     'ful': 'Fulani',
     'kik': 'Kikuyu',
     'hau': 'Hausa',
