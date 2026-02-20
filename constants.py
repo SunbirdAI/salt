@@ -50,7 +50,6 @@ SALT_LANGUAGE_NAMES = {
     'nya': 'Chichewa',
     'dga': 'Dagaare',
     'dag': 'Dagbani',
-    'dho': 'Dholuo',
     'din': 'Dinka',
     'ewe': 'Ewe',
     'fra': 'French',
