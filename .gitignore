@@ -174,3 +174,11 @@ poetry.toml
 pyrightconfig.json
 
 # End of https://www.toptal.com/developers/gitignore/api/python
+
+# Spark-TTS
+Spark-TTS-0.5B/
+Spark-TTS/
+unsloth_compiled_cache/
+
+# Output
+outputs/
