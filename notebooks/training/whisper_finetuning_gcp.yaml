@@ -11,22 +11,23 @@ lora_config:
 
 training_args:
     output_dir: whisper-large-v3-multilingual
-    per_device_train_batch_size: 16
-    per_device_eval_batch_size: 16
+    per_device_train_batch_size: 2
+    per_device_eval_batch_size: 2
     gradient_accumulation_steps: 4  # increase by 2x for every 2x decrease in batch size
     learning_rate: 1.0e-5
     warmup_steps: 500
     max_steps: 7500
-    gradient_checkpointing: True
+    gradient_checkpointing: False
     gradient_checkpointing_kwargs:
-      use_reentrant: True
-    fp16: True
+      use_reentrant: False
+    fp16: False
+    bf16: True
     eval_strategy: steps
     predict_with_generate: True
     generation_max_length: 200
     save_steps: 250
     eval_steps: 250
-    logging_steps: 250
+    logging_steps: 50
     load_best_model_at_end: True
     metric_for_best_model: loss
     greater_is_better: False
@@ -37,139 +38,30 @@ training_args:
 train:
     download_datasets_in_parallel: True
     huggingface_load:
-        - path: Sunbird/external-speech-data
-          name: common-voice-sample-packed-lug
-        - path: Sunbird/external-speech-data
-          name: common-voice-sample-packed-swa
-          split: train[:-25]
-        - path: Sunbird/external-speech-data
-          name: common-voice-sample-packed-kin
-          split: train[:-25]
-        - path: Sunbird/external-speech-data
-          name: makerere-radio-speech
-        - path: Sunbird/external-speech-data
-          name: makerere-yogera-ach
-        - path: Sunbird/external-speech-data
-          name: makerere-yogera-lug
-        - path: Sunbird/external-speech-data
-          name: makerere-yogera-nyn
-        # Save some myx and xog data for validation
-        - path: Sunbird/external-speech-data
-          name: makerere-yogera-myx
-          split: train[:-100]
-        - path: Sunbird/external-speech-data
-          name: makerere-yogera-xog
-          split: train[:-100]
-        # Call centre data
-        - path: Sunbird/salt-ucfd
-          name: eng
-          split: train
-        - path: Sunbird/salt-ucfd
-          name: lug
-          split: train    
-        - path: Sunbird/salt-ucfd
-          name: numbers-eng
-          split: train
-        - path: Sunbird/salt-ucfd
-          name: numbers-lug
-          split: train  
-        - path: Sunbird/salt-tracfm
-          name: lug
-          split: train
-        # Main SALT ASR training data
-        - path: Sunbird/salt
-          name: multispeaker-lug
-          split: train
-        - path: Sunbird/salt
-          name: multispeaker-eng
-          split: train
-        - path: Sunbird/salt
-          name: multispeaker-ach
-          split: train
-        - path: Sunbird/salt
-          name: multispeaker-lgg
-          split: train
-        - path: Sunbird/salt
-          name: multispeaker-teo
-          split: train
-        - path: Sunbird/salt
-          name: multispeaker-nyn
-          split: train
-        # Google FLEURS
-        - path: google/fleurs
-          split: train
-          name: lg_ug
-          trust_remote_code: True
-        - path: google/fleurs
-          split: train
-          name: sw_ke
-          trust_remote_code: True
+        - path: gcs://sunflower-data/speech/lug_commonvoice/dev/*.parquet
     source:
       type: speech
-      language: [lug,eng,ach,lgg,teo,nyn,myx,xog,swa,kin]
+      language: [lug]
       preprocessing:
-        # Downsample some examples to 8KHz (to simulate phone audio) 
-        - set_sample_rate:
-            rate: 8_000
-            p: 0.2
-        # Then upsample again
         - set_sample_rate:
             rate: 16_000
-        - normalize_audio
-        - augment_audio_speed:
-            p: 0.2
-            low: 0.95
-            high: 1.15
-        - augment_audio_noise:
-            max_relative_amplitude: 0.5
-            noise_audio_repo:
-                path: Sunbird/urban-noise
-                name: small
-                split: train       
+        - normalize_audio     
     target:
       type: text
       preprocessing:
         - ensure_text_ends_with_punctuation
-      language: [lug,eng,ach,lgg,teo,nyn,myx,xog,swa,kin]
+      language: [lug]
     shuffle: True
 validation:
     huggingface_load:
-        - path: Sunbird/salt
-          name: multispeaker-eng
-          split: dev
-        - path: Sunbird/salt
-          name: multispeaker-lug
-          split: dev
-        - path: Sunbird/salt
-          name: multispeaker-ach
-          split: dev
-        - path: Sunbird/salt
-          name: multispeaker-lgg
-          split: dev
-        - path: Sunbird/salt
-          name: multispeaker-teo
-          split: dev
-        - path: Sunbird/salt
-          name: multispeaker-nyn
-          split: dev
-        - path: Sunbird/external-speech-data
-          name: makerere-yogera-myx
-          split: train[-100:]
-        - path: Sunbird/external-speech-data
-          name: makerere-yogera-xog
-          split: train[-100:]
-        - path: Sunbird/external-speech-data
-          name: common-voice-sample-packed-swa
-          split: train[-25:]
-        - path: Sunbird/external-speech-data
-          name: common-voice-sample-packed-kin
-          split: train[-25:]
+        - path: gcs://sunflower-data/speech/lug_commonvoice/dev/*.parquet
     source:
       type: speech
-      language: [lug,eng,ach,lgg,teo,nyn,myx,xog,swa,kin]
+      language: [lug]
       preprocessing:
         - set_sample_rate:
             rate: 16_000
+        - normalize_audio  
     target:
       type: text
-      language: [lug,eng,ach,lgg,teo,nyn,myx,xog,swa,kin]
+      language: [lug]

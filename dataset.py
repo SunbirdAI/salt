@@ -74,7 +74,12 @@ def _add_speaker_id_studio_if_not_present(sample):
 
 
 def _load_single_huggingface_dataset(load_dataset_params):
-    ds = datasets.load_dataset(**load_dataset_params)
+    ds = datasets.load_dataset(
+        "parquet", data_files=load_dataset_params["path"],
+        storage_options = {"token": "google_default"}
+    )
+    ds= ds.cast_column("audio", datasets.Audio())
+
     if isinstance(ds, datasets.DatasetDict):
         split_names = list(ds.data.keys())
         # If the split wasn't specified, but there's only one, then just go
