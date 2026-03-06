@@ -219,13 +219,13 @@ def _dataset_id_from_config(load_params):
 def _load_datasets(config):
     """Retrieve all specified datasets and return as a list."""
     loaded_datasets = []
-    if "datasets" not in config:
+    if "datasets" not in config and "huggingface_load" not in config:
         raise ValueError(
-            "There should be a `datasets` entry in the dataset config, "
+            "There should be a `datasets` or `huggingface_load` entry in the dataset config, "
             f"specifying which datasets to download. Got: {config}."
         )
 
-    load_list = config["datasets"]
+    load_list = config["datasets"] if "datasets" in config else config["huggingface_load"]
 
     # Optionally pre-download everything at once
     if config.get("download_datasets_in_parallel"):
