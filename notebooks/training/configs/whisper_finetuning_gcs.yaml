@@ -37,7 +37,7 @@ training_args:
     
 train:
     download_datasets_in_parallel: True
-    huggingface_load:
+    datasets:
         - path: gcs://sunflower-data/speech/lug_commonvoice/dev/*.parquet
     source:
       type: speech
@@ -53,7 +53,7 @@ train:
       language: [lug]
     shuffle: True
 validation:
-    huggingface_load:
+    datasets:
         - path: gcs://sunflower-data/speech/lug_commonvoice/dev/*.parquet
     source:
       type: speech
