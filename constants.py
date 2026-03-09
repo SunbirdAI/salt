@@ -56,7 +56,6 @@ SALT_LANGUAGE_NAMES = {
     'ful': 'Fulani',
     'kik': 'Kikuyu',
     'hau': 'Hausa',
-    'ibo': 'Igbo',
     'kpo': 'Ikposo',
     'kab': 'Kabyle',
     'kln': 'Kalenjin',
