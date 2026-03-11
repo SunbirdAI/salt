@@ -73,18 +73,23 @@ def _add_speaker_id_studio_if_not_present(sample):
     return sample
 
 
-def _load_single_dataset(load_dataset_params):
+def _load_single_dataset(load_dataset_params, gcs_key_path=None):
     # if path contains gcs://, then load with google_default token
     if "path" in load_dataset_params and "gcs://" in load_dataset_params["path"]:
+        if gcs_key_path is None:
+            raise ValueError(
+                "gcs_key_path must be provided when loading from Google Cloud Storage."
+            )
         ds = datasets.load_dataset(
-            "parquet", data_files=load_dataset_params["path"],
-            storage_options = {"token": "google_default"}
+            "parquet",
+            data_files=load_dataset_params["path"],
+            storage_options={"token": gcs_key_path},
         )
         ds= ds.cast_column("audio", datasets.Audio())
     # otherwise load from hugging face with the provided params
     else:
         ds = datasets.load_dataset(**load_dataset_params)
-    
+
     if isinstance(ds, datasets.DatasetDict):
         split_names = list(ds.data.keys())
         # If the split wasn't specified, but there's only one, then just go
@@ -226,6 +231,7 @@ def _load_datasets(config):
         )
 
     load_list = config["datasets"] if "datasets" in config else config["huggingface_load"]
+    gcs_key_path = config.get("gcs_key_path")
 
     # Optionally pre-download everything at once
     if config.get("download_datasets_in_parallel"):
@@ -234,12 +240,16 @@ def _load_datasets(config):
             if "join" in l:
                 for i in (0, 1):
                     thread = threading.Thread(
-                        target=_load_single_dataset, args=(l["join"][i],)
+                        target=_load_single_dataset,
+                        args=(l["join"][i],),
+                        kwargs={"gcs_key_path": gcs_key_path},
                     )
                     threads.append(thread)
             else:
                 thread = threading.Thread(
-                    target=_load_single_dataset, args=(l,)
+                    target=_load_single_dataset,
+                    args=(l,),
+                    kwargs={"gcs_key_path": gcs_key_path},
                 )
                 threads.append(thread)
                 thread.start()
@@ -253,8 +263,8 @@ def _load_datasets(config):
                     "If a dataset join is specified, then there should be a "
                     f"list of exactly two datasets to be joined. Got: {l}."
                 )
-            left = _load_single_dataset(l["join"][0])
-            right = _load_single_dataset(l["join"][1])
+            left = _load_single_dataset(l["join"][0], gcs_key_path=gcs_key_path)
+            right = _load_single_dataset(l["join"][1], gcs_key_path=gcs_key_path)
 
             generator_function = lambda: _combine_datasets_generator(left, right)
             ds = datasets.IterableDataset.from_generator(generator_function)
@@ -264,7 +274,7 @@ def _load_datasets(config):
                 + _dataset_id_from_config(l["join"][1])
             )
         else:
-            ds = _load_single_dataset(l)
+            ds = _load_single_dataset(l, gcs_key_path=gcs_key_path)
             dataset_id = _dataset_id_from_config(l)
         loaded_datasets.append([ds, dataset_id])
 

@@ -37,6 +37,7 @@ training_args:
     
 train:
     download_datasets_in_parallel: True
+    gcs_key_path: gcs-data-viewer-key.json
     datasets:
         - path: gcs://sunflower-data/speech/lug_commonvoice/dev/*.parquet
     source:
@@ -53,6 +54,7 @@ train:
       language: [lug]
     shuffle: True
 validation:
+    gcs_key_path: gcs-data-viewer-key.json
     datasets:
         - path: gcs://sunflower-data/speech/lug_commonvoice/dev/*.parquet
     source:
