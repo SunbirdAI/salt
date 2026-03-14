@@ -11,8 +11,8 @@ lora_config:
   bias: none
 training_args:
   output_dir: whisper-large-v3-multilingual
-  per_device_train_batch_size: 2
-  per_device_eval_batch_size: 2
+  per_device_train_batch_size: 16
+  per_device_eval_batch_size: 16
   gradient_accumulation_steps: 4
   learning_rate: 1.0e-05
   warmup_steps: 500
@@ -32,7 +32,7 @@ training_args:
   metric_for_best_model: loss
   greater_is_better: false
   push_to_hub: true
-  hub_model_id: jq/whisper-large-v3-salt-plus-xog-myx-kin-swa
+  hub_model_id: huwenjie333/whisper-large-v3-salt-gcloud-test
   save_total_limit: 2
 train:
   download_datasets_in_parallel: true
@@ -49,7 +49,6 @@ train:
   - path: gcs://sunflower-data/speech/amh_kyagaba/train/*.parquet
   - path: gcs://sunflower-data/speech/amh_makbenchmark/train/*.parquet
   - path: gcs://sunflower-data/speech/amh_shunyalabs/train/*.parquet
-  - path: gcs://sunflower-data/speech/amh_waxal/train/*.parquet
   - path: gcs://sunflower-data/speech/bam_makbenchmark/train/*.parquet
   - path: gcs://sunflower-data/speech/bam_robotsbambari/train/*.parquet
   - path: gcs://sunflower-data/speech/bam_robotsmali/train/*.parquet
@@ -169,6 +168,7 @@ train:
       wol, xho, xog, yor, zul]
   shuffle: true
 validation:
+  download_datasets_in_parallel: true
   gcs_key_path: gcs-data-viewer-key.json
   datasets:
   - path: gcs://sunflower-data/speech/ach_salt/dev/*.parquet

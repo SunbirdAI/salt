@@ -80,12 +80,14 @@ def _load_single_dataset(load_dataset_params, gcs_key_path=None):
             raise ValueError(
                 "gcs_key_path must be provided when loading from Google Cloud Storage."
             )
+        print("downloading datasets from: ", load_dataset_params["path"])
         ds = datasets.load_dataset(
             "parquet",
             data_files=load_dataset_params["path"],
             storage_options={"token": gcs_key_path},
         )
         ds= ds.cast_column("audio", datasets.Audio())
+        print("download completed: ", load_dataset_params["path"])
     # otherwise load from hugging face with the provided params
     else:
         ds = datasets.load_dataset(**load_dataset_params)
@@ -235,6 +237,12 @@ def _load_datasets(config):
 
     # Optionally pre-download everything at once
     if config.get("download_datasets_in_parallel"):
+        # Disable progress bars to prevent tqdm thread-safety issues (e.g. `_lock` AttributeError)
+        datasets.disable_progress_bar()
+        # Explicitly initialize the tqdm lock in the main thread to prevent concurrent `del tqdm_class._lock` bugs
+        import tqdm
+        tqdm.tqdm.get_lock()
+        
         threads = []
         for l in _ensure_list(load_list):
             if "join" in l:

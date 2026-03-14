@@ -34,13 +34,41 @@ def update_config():
         print("No datasets found or error in listing paths. Exiting.")
         return
 
-    # Extract unique language codes (e.g., 'ach' from 'ach_salt')
-    languages = sorted(list(set(name.split('_')[0] for name in dataset_names if '_' in name)))
+    # Check for parquet files and construct the dataset lists
+    train_datasets = []
+    dev_datasets = []
+    valid_languages = set()
 
-    # Construct the dataset lists for train and dev
-    train_datasets = [{'path': f'gcs://sunflower-data/speech/{name}/train/*.parquet'} for name in dataset_names]
-    dev_datasets = [{'path': f'gcs://sunflower-data/speech/{name}/dev/*.parquet'} for name in dataset_names]
+    for name in dataset_names:
+        train_path = f"sunflower-data/speech/{name}/train"
+        dev_path = f"sunflower-data/speech/{name}/dev"
+        
+        try:
+            train_files = [f for f in gcs.ls(train_path) if f.endswith('.parquet')]
+        except Exception:
+            train_files = []
+            
+        try:
+            dev_files = [f for f in gcs.ls(dev_path) if f.endswith('.parquet')]
+        except Exception:
+            dev_files = []
+            
+        print(f"Dataset {name}: {len(train_files)} train *.parquet, {len(dev_files)} dev *.parquet")
+        
+        has_train = len(train_files) > 0
+        has_dev = len(dev_files) > 0
+        
+        if has_train:
+            train_datasets.append({'path': f'gcs://sunflower-data/speech/{name}/train/*.parquet'})
+            if '_' in name:
+                valid_languages.add(name.split('_')[0])
+                
+        if has_dev:
+            dev_datasets.append({'path': f'gcs://sunflower-data/speech/{name}/dev/*.parquet'})
+            if '_' in name:
+                valid_languages.add(name.split('_')[0])
 
+    languages = sorted(list(valid_languages))
     config_path = 'configs/whisper_finetuning_gcs.yaml'
 
     print(f"Loading {config_path}...")
