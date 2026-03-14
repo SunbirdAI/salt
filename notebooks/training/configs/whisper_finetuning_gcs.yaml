@@ -1,0 +1,300 @@
+pretrained_model: openai/whisper-large-v3
+mlflow_experiment_name: stt-whisper
+use_peft: false
+lora_config:
+  r: 32
+  lora_alpha: 64
+  target_modules:
+  - q_proj
+  - v_proj
+  lora_dropout: 0.05
+  bias: none
+training_args:
+  output_dir: whisper-large-v3-multilingual
+  per_device_train_batch_size: 16
+  per_device_eval_batch_size: 16
+  gradient_accumulation_steps: 4
+  learning_rate: 1.0e-05
+  warmup_steps: 500
+  max_steps: 7500
+  gradient_checkpointing: true
+  gradient_checkpointing_kwargs:
+    use_reentrant: true
+  fp16: false
+  bf16: true
+  eval_strategy: steps
+  predict_with_generate: true
+  generation_max_length: 200
+  save_steps: 250
+  eval_steps: 250
+  logging_steps: 50
+  load_best_model_at_end: true
+  metric_for_best_model: loss
+  greater_is_better: false
+  push_to_hub: true
+  hub_model_id: huwenjie333/whisper-large-v3-salt-gcloud-test
+  save_total_limit: 2
+train:
+  download_datasets_in_parallel: true
+  gcs_key_path: gcs-data-viewer-key.json
+  datasets:
+  - path: gcs://sunflower-data/speech/ach_salt/train/*.parquet
+  - path: gcs://sunflower-data/speech/ach_waxal/train/*.parquet
+  - path: gcs://sunflower-data/speech/afr_afrikaans30s/train/*.parquet
+  - path: gcs://sunflower-data/speech/afr_commonvoice/train/*.parquet
+  - path: gcs://sunflower-data/speech/afr_fleurs/train/*.parquet
+  - path: gcs://sunflower-data/speech/afr_makbenchmark/train/*.parquet
+  - path: gcs://sunflower-data/speech/aka_waxal/train/*.parquet
+  - path: gcs://sunflower-data/speech/amh_commonvoice/train/*.parquet
+  - path: gcs://sunflower-data/speech/amh_kyagaba/train/*.parquet
+  - path: gcs://sunflower-data/speech/amh_makbenchmark/train/*.parquet
+  - path: gcs://sunflower-data/speech/amh_shunyalabs/train/*.parquet
+  - path: gcs://sunflower-data/speech/bam_makbenchmark/train/*.parquet
+  - path: gcs://sunflower-data/speech/bam_robotsbambari/train/*.parquet
+  - path: gcs://sunflower-data/speech/bam_robotsmali/train/*.parquet
+  - path: gcs://sunflower-data/speech/bem_csikasote/train/*.parquet
+  - path: gcs://sunflower-data/speech/bem_makbenchmark/train/*.parquet
+  - path: gcs://sunflower-data/speech/ber_tosd/train/*.parquet
+  - path: gcs://sunflower-data/speech/ber_tutlay/train/*.parquet
+  - path: gcs://sunflower-data/speech/cgg_commonvoice/train/*.parquet
+  - path: gcs://sunflower-data/speech/dag_commonvoice/train/*.parquet
+  - path: gcs://sunflower-data/speech/dag_waxal/train/*.parquet
+  - path: gcs://sunflower-data/speech/dga_waxal/train/*.parquet
+  - path: gcs://sunflower-data/speech/eng_intronhealth/train/*.parquet
+  - path: gcs://sunflower-data/speech/eng_salt/train/*.parquet
+  - path: gcs://sunflower-data/speech/ewe_makbenchmark/train/*.parquet
+  - path: gcs://sunflower-data/speech/ewe_waxal/train/*.parquet
+  - path: gcs://sunflower-data/speech/fra_gigant/train/*.parquet
+  - path: gcs://sunflower-data/speech/ful_fleurs/train/*.parquet
+  - path: gcs://sunflower-data/speech/ful_makbenchmark/train/*.parquet
+  - path: gcs://sunflower-data/speech/ful_waxal/train/*.parquet
+  - path: gcs://sunflower-data/speech/hau_africanvoices/train/*.parquet
+  - path: gcs://sunflower-data/speech/hau_clearglobal/train/*.parquet
+  - path: gcs://sunflower-data/speech/hau_commonvoice/train/*.parquet
+  - path: gcs://sunflower-data/speech/hau_fleurs/train/*.parquet
+  - path: gcs://sunflower-data/speech/hau_makbenchmark/train/*.parquet
+  - path: gcs://sunflower-data/speech/hau_naijavoices/train/*.parquet
+  - path: gcs://sunflower-data/speech/ibo_africanvoices/train/*.parquet
+  - path: gcs://sunflower-data/speech/ibo_commonvoice/train/*.parquet
+  - path: gcs://sunflower-data/speech/ibo_fleurs/train/*.parquet
+  - path: gcs://sunflower-data/speech/ibo_makbenchmark/train/*.parquet
+  - path: gcs://sunflower-data/speech/ibo_naijavoices/train/*.parquet
+  - path: gcs://sunflower-data/speech/kab_commonvoice/train/*.parquet
+  - path: gcs://sunflower-data/speech/kau_clearglobal/train/*.parquet
+  - path: gcs://sunflower-data/speech/kik_anvkekikuyu/train/*.parquet
+  - path: gcs://sunflower-data/speech/kin_commonvoice/train/*.parquet
+  - path: gcs://sunflower-data/speech/kin_makbenchmark/train/*.parquet
+  - path: gcs://sunflower-data/speech/kln_ankekalenjin/train/*.parquet
+  - path: gcs://sunflower-data/speech/kln_commonvoice/train/*.parquet
+  - path: gcs://sunflower-data/speech/koo_commonvoice/train/*.parquet
+  - path: gcs://sunflower-data/speech/kpo_waxal/train/*.parquet
+  - path: gcs://sunflower-data/speech/led_commonvoice/train/*.parquet
+  - path: gcs://sunflower-data/speech/lgg_salt/train/*.parquet
+  - path: gcs://sunflower-data/speech/lin_fleurs/train/*.parquet
+  - path: gcs://sunflower-data/speech/lin_kasuletrev/train/*.parquet
+  - path: gcs://sunflower-data/speech/lin_shunyalabs/train/*.parquet
+  - path: gcs://sunflower-data/speech/lin_waxal/train/*.parquet
+  - path: gcs://sunflower-data/speech/lth_commonvoice/train/*.parquet
+  - path: gcs://sunflower-data/speech/lug_commonvoice/train/*.parquet
+  - path: gcs://sunflower-data/speech/lug_fleurs/train/*.parquet
+  - path: gcs://sunflower-data/speech/lug_makbenchmark/train/*.parquet
+  - path: gcs://sunflower-data/speech/lug_makerereradio/train/*.parquet
+  - path: gcs://sunflower-data/speech/lug_salt/train/*.parquet
+  - path: gcs://sunflower-data/speech/lug_waxal/train/*.parquet
+  - path: gcs://sunflower-data/speech/luo_anvkeluo/train/*.parquet
+  - path: gcs://sunflower-data/speech/luo_commonvoice/train/*.parquet
+  - path: gcs://sunflower-data/speech/luo_fleurs/train/*.parquet
+  - path: gcs://sunflower-data/speech/luy_digitaldivide/train/*.parquet
+  - path: gcs://sunflower-data/speech/mlg_waxal/train/*.parquet
+  - path: gcs://sunflower-data/speech/myx_waxal/train/*.parquet
+  - path: gcs://sunflower-data/speech/nbl_nextvoices/train/*.parquet
+  - path: gcs://sunflower-data/speech/nya_fleurs/train/*.parquet
+  - path: gcs://sunflower-data/speech/nya_michsethowusu/train/*.parquet
+  - path: gcs://sunflower-data/speech/nyn_salt/train/*.parquet
+  - path: gcs://sunflower-data/speech/nyn_waxal/train/*.parquet
+  - path: gcs://sunflower-data/speech/orm_fleurs/train/*.parquet
+  - path: gcs://sunflower-data/speech/orm_makbenchmark/train/*.parquet
+  - path: gcs://sunflower-data/speech/orm_waxal/train/*.parquet
+  - path: gcs://sunflower-data/speech/pcm_africanvoices/train/*.parquet
+  - path: gcs://sunflower-data/speech/pcm_commonvoice/train/*.parquet
+  - path: gcs://sunflower-data/speech/ruc_commonvoice/train/*.parquet
+  - path: gcs://sunflower-data/speech/rwm_commonvoice/train/*.parquet
+  - path: gcs://sunflower-data/speech/sna_fleurs/train/*.parquet
+  - path: gcs://sunflower-data/speech/sna_makbenchmark/train/*.parquet
+  - path: gcs://sunflower-data/speech/sna_waxal/train/*.parquet
+  - path: gcs://sunflower-data/speech/som_anvkesomali/train/*.parquet
+  - path: gcs://sunflower-data/speech/som_fleurs/train/*.parquet
+  - path: gcs://sunflower-data/speech/som_skydheere/train/*.parquet
+  - path: gcs://sunflower-data/speech/sot_fleurs/train/*.parquet
+  - path: gcs://sunflower-data/speech/sot_nextvoices/train/*.parquet
+  - path: gcs://sunflower-data/speech/swa_commonvoice/train/*.parquet
+  - path: gcs://sunflower-data/speech/swa_fleurs/train/*.parquet
+  - path: gcs://sunflower-data/speech/teo_salt/train/*.parquet
+  - path: gcs://sunflower-data/speech/tsn_commonvoice/train/*.parquet
+  - path: gcs://sunflower-data/speech/tsn_nextvoices/train/*.parquet
+  - path: gcs://sunflower-data/speech/ttj_commonvoice/train/*.parquet
+  - path: gcs://sunflower-data/speech/wol_fleurs/train/*.parquet
+  - path: gcs://sunflower-data/speech/wol_kallama/train/*.parquet
+  - path: gcs://sunflower-data/speech/wol_makbenchmark/train/*.parquet
+  - path: gcs://sunflower-data/speech/xho_fleurs/train/*.parquet
+  - path: gcs://sunflower-data/speech/xho_makbenchmark/train/*.parquet
+  - path: gcs://sunflower-data/speech/xho_nextvoices/train/*.parquet
+  - path: gcs://sunflower-data/speech/xog_waxal/train/*.parquet
+  - path: gcs://sunflower-data/speech/yor_africanvoices/train/*.parquet
+  - path: gcs://sunflower-data/speech/yor_commonvoice/train/*.parquet
+  - path: gcs://sunflower-data/speech/yor_fleurs/train/*.parquet
+  - path: gcs://sunflower-data/speech/yor_makbenchmark/train/*.parquet
+  - path: gcs://sunflower-data/speech/yor_naijavoices/train/*.parquet
+  - path: gcs://sunflower-data/speech/zul_fleurs/train/*.parquet
+  - path: gcs://sunflower-data/speech/zul_makbenchmark/train/*.parquet
+  - path: gcs://sunflower-data/speech/zul_nextvoices/train/*.parquet
+  source:
+    type: speech
+    language: [ach, afr, aka, amh, bam, bem, ber, cgg, dag, dga, eng, ewe, fra, ful,
+      hau, ibo, kab, kau, kik, kin, kln, koo, kpo, led, lgg, lin, lth, lug, luo, luy,
+      mlg, myx, nbl, nya, nyn, orm, pcm, ruc, rwm, sna, som, sot, swa, teo, tsn, ttj,
+      wol, xho, xog, yor, zul]
+    preprocessing:
+    - set_sample_rate:
+        rate: 16000
+    - normalize_audio
+  target:
+    type: text
+    preprocessing:
+    - ensure_text_ends_with_punctuation
+    language: [ach, afr, aka, amh, bam, bem, ber, cgg, dag, dga, eng, ewe, fra, ful,
+      hau, ibo, kab, kau, kik, kin, kln, koo, kpo, led, lgg, lin, lth, lug, luo, luy,
+      mlg, myx, nbl, nya, nyn, orm, pcm, ruc, rwm, sna, som, sot, swa, teo, tsn, ttj,
+      wol, xho, xog, yor, zul]
+  shuffle: true
+validation:
+  download_datasets_in_parallel: true
+  gcs_key_path: gcs-data-viewer-key.json
+  datasets:
+  - path: gcs://sunflower-data/speech/ach_salt/dev/*.parquet
+  - path: gcs://sunflower-data/speech/ach_waxal/dev/*.parquet
+  - path: gcs://sunflower-data/speech/afr_afrikaans30s/dev/*.parquet
+  - path: gcs://sunflower-data/speech/afr_commonvoice/dev/*.parquet
+  - path: gcs://sunflower-data/speech/afr_fleurs/dev/*.parquet
+  - path: gcs://sunflower-data/speech/afr_makbenchmark/dev/*.parquet
+  - path: gcs://sunflower-data/speech/aka_waxal/dev/*.parquet
+  - path: gcs://sunflower-data/speech/amh_commonvoice/dev/*.parquet
+  - path: gcs://sunflower-data/speech/amh_kyagaba/dev/*.parquet
+  - path: gcs://sunflower-data/speech/amh_makbenchmark/dev/*.parquet
+  - path: gcs://sunflower-data/speech/amh_shunyalabs/dev/*.parquet
+  - path: gcs://sunflower-data/speech/amh_waxal/dev/*.parquet
+  - path: gcs://sunflower-data/speech/bam_makbenchmark/dev/*.parquet
+  - path: gcs://sunflower-data/speech/bam_robotsbambari/dev/*.parquet
+  - path: gcs://sunflower-data/speech/bam_robotsmali/dev/*.parquet
+  - path: gcs://sunflower-data/speech/bem_csikasote/dev/*.parquet
+  - path: gcs://sunflower-data/speech/bem_makbenchmark/dev/*.parquet
+  - path: gcs://sunflower-data/speech/ber_tosd/dev/*.parquet
+  - path: gcs://sunflower-data/speech/ber_tutlay/dev/*.parquet
+  - path: gcs://sunflower-data/speech/cgg_commonvoice/dev/*.parquet
+  - path: gcs://sunflower-data/speech/dag_commonvoice/dev/*.parquet
+  - path: gcs://sunflower-data/speech/dag_waxal/dev/*.parquet
+  - path: gcs://sunflower-data/speech/dga_waxal/dev/*.parquet
+  - path: gcs://sunflower-data/speech/eng_intronhealth/dev/*.parquet
+  - path: gcs://sunflower-data/speech/eng_salt/dev/*.parquet
+  - path: gcs://sunflower-data/speech/ewe_makbenchmark/dev/*.parquet
+  - path: gcs://sunflower-data/speech/ewe_waxal/dev/*.parquet
+  - path: gcs://sunflower-data/speech/fra_gigant/dev/*.parquet
+  - path: gcs://sunflower-data/speech/ful_fleurs/dev/*.parquet
+  - path: gcs://sunflower-data/speech/ful_makbenchmark/dev/*.parquet
+  - path: gcs://sunflower-data/speech/ful_waxal/dev/*.parquet
+  - path: gcs://sunflower-data/speech/hau_africanvoices/dev/*.parquet
+  - path: gcs://sunflower-data/speech/hau_clearglobal/dev/*.parquet
+  - path: gcs://sunflower-data/speech/hau_commonvoice/dev/*.parquet
+  - path: gcs://sunflower-data/speech/hau_fleurs/dev/*.parquet
+  - path: gcs://sunflower-data/speech/hau_makbenchmark/dev/*.parquet
+  - path: gcs://sunflower-data/speech/hau_naijavoices/dev/*.parquet
+  - path: gcs://sunflower-data/speech/ibo_africanvoices/dev/*.parquet
+  - path: gcs://sunflower-data/speech/ibo_commonvoice/dev/*.parquet
+  - path: gcs://sunflower-data/speech/ibo_fleurs/dev/*.parquet
+  - path: gcs://sunflower-data/speech/ibo_makbenchmark/dev/*.parquet
+  - path: gcs://sunflower-data/speech/ibo_naijavoices/dev/*.parquet
+  - path: gcs://sunflower-data/speech/kab_commonvoice/dev/*.parquet
+  - path: gcs://sunflower-data/speech/kau_clearglobal/dev/*.parquet
+  - path: gcs://sunflower-data/speech/kik_anvkekikuyu/dev/*.parquet
+  - path: gcs://sunflower-data/speech/kin_commonvoice/dev/*.parquet
+  - path: gcs://sunflower-data/speech/kin_makbenchmark/dev/*.parquet
+  - path: gcs://sunflower-data/speech/kln_ankekalenjin/dev/*.parquet
+  - path: gcs://sunflower-data/speech/kln_commonvoice/dev/*.parquet
+  - path: gcs://sunflower-data/speech/koo_commonvoice/dev/*.parquet
+  - path: gcs://sunflower-data/speech/kpo_waxal/dev/*.parquet
+  - path: gcs://sunflower-data/speech/led_commonvoice/dev/*.parquet
+  - path: gcs://sunflower-data/speech/lgg_salt/dev/*.parquet
+  - path: gcs://sunflower-data/speech/lin_fleurs/dev/*.parquet
+  - path: gcs://sunflower-data/speech/lin_kasuletrev/dev/*.parquet
+  - path: gcs://sunflower-data/speech/lin_shunyalabs/dev/*.parquet
+  - path: gcs://sunflower-data/speech/lin_waxal/dev/*.parquet
+  - path: gcs://sunflower-data/speech/lth_commonvoice/dev/*.parquet
+  - path: gcs://sunflower-data/speech/lug_commonvoice/dev/*.parquet
+  - path: gcs://sunflower-data/speech/lug_fleurs/dev/*.parquet
+  - path: gcs://sunflower-data/speech/lug_makbenchmark/dev/*.parquet
+  - path: gcs://sunflower-data/speech/lug_makerereradio/dev/*.parquet
+  - path: gcs://sunflower-data/speech/lug_salt/dev/*.parquet
+  - path: gcs://sunflower-data/speech/lug_waxal/dev/*.parquet
+  - path: gcs://sunflower-data/speech/luo_anvkeluo/dev/*.parquet
+  - path: gcs://sunflower-data/speech/luo_commonvoice/dev/*.parquet
+  - path: gcs://sunflower-data/speech/luo_fleurs/dev/*.parquet
+  - path: gcs://sunflower-data/speech/luy_digitaldivide/dev/*.parquet
+  - path: gcs://sunflower-data/speech/mlg_waxal/dev/*.parquet
+  - path: gcs://sunflower-data/speech/myx_waxal/dev/*.parquet
+  - path: gcs://sunflower-data/speech/nbl_nextvoices/dev/*.parquet
+  - path: gcs://sunflower-data/speech/nya_fleurs/dev/*.parquet
+  - path: gcs://sunflower-data/speech/nya_michsethowusu/dev/*.parquet
+  - path: gcs://sunflower-data/speech/nyn_salt/dev/*.parquet
+  - path: gcs://sunflower-data/speech/nyn_waxal/dev/*.parquet
+  - path: gcs://sunflower-data/speech/orm_fleurs/dev/*.parquet
+  - path: gcs://sunflower-data/speech/orm_makbenchmark/dev/*.parquet
+  - path: gcs://sunflower-data/speech/orm_waxal/dev/*.parquet
+  - path: gcs://sunflower-data/speech/pcm_africanvoices/dev/*.parquet
+  - path: gcs://sunflower-data/speech/pcm_commonvoice/dev/*.parquet
+  - path: gcs://sunflower-data/speech/ruc_commonvoice/dev/*.parquet
+  - path: gcs://sunflower-data/speech/rwm_commonvoice/dev/*.parquet
+  - path: gcs://sunflower-data/speech/sna_fleurs/dev/*.parquet
+  - path: gcs://sunflower-data/speech/sna_makbenchmark/dev/*.parquet
+  - path: gcs://sunflower-data/speech/sna_waxal/dev/*.parquet
+  - path: gcs://sunflower-data/speech/som_anvkesomali/dev/*.parquet
+  - path: gcs://sunflower-data/speech/som_fleurs/dev/*.parquet
+  - path: gcs://sunflower-data/speech/som_skydheere/dev/*.parquet
+  - path: gcs://sunflower-data/speech/sot_fleurs/dev/*.parquet
+  - path: gcs://sunflower-data/speech/sot_nextvoices/dev/*.parquet
+  - path: gcs://sunflower-data/speech/swa_commonvoice/dev/*.parquet
+  - path: gcs://sunflower-data/speech/swa_fleurs/dev/*.parquet
+  - path: gcs://sunflower-data/speech/teo_salt/dev/*.parquet
+  - path: gcs://sunflower-data/speech/tsn_commonvoice/dev/*.parquet
+  - path: gcs://sunflower-data/speech/tsn_nextvoices/dev/*.parquet
+  - path: gcs://sunflower-data/speech/ttj_commonvoice/dev/*.parquet
+  - path: gcs://sunflower-data/speech/wol_fleurs/dev/*.parquet
+  - path: gcs://sunflower-data/speech/wol_kallama/dev/*.parquet
+  - path: gcs://sunflower-data/speech/wol_makbenchmark/dev/*.parquet
+  - path: gcs://sunflower-data/speech/xho_fleurs/dev/*.parquet
+  - path: gcs://sunflower-data/speech/xho_makbenchmark/dev/*.parquet
+  - path: gcs://sunflower-data/speech/xho_nextvoices/dev/*.parquet
+  - path: gcs://sunflower-data/speech/xog_waxal/dev/*.parquet
+  - path: gcs://sunflower-data/speech/yor_africanvoices/dev/*.parquet
+  - path: gcs://sunflower-data/speech/yor_commonvoice/dev/*.parquet
+  - path: gcs://sunflower-data/speech/yor_fleurs/dev/*.parquet
+  - path: gcs://sunflower-data/speech/yor_makbenchmark/dev/*.parquet
+  - path: gcs://sunflower-data/speech/yor_naijavoices/dev/*.parquet
+  - path: gcs://sunflower-data/speech/zul_fleurs/dev/*.parquet
+  - path: gcs://sunflower-data/speech/zul_makbenchmark/dev/*.parquet
+  - path: gcs://sunflower-data/speech/zul_nextvoices/dev/*.parquet
+  source:
+    type: speech
+    language: [ach, afr, aka, amh, bam, bem, ber, cgg, dag, dga, eng, ewe, fra, ful,
+      hau, ibo, kab, kau, kik, kin, kln, koo, kpo, led, lgg, lin, lth, lug, luo, luy,
+      mlg, myx, nbl, nya, nyn, orm, pcm, ruc, rwm, sna, som, sot, swa, teo, tsn, ttj,
+      wol, xho, xog, yor, zul]
+    preprocessing:
+    - set_sample_rate:
+        rate: 16000
+    - normalize_audio
+  target:
+    type: text
+    language: [ach, afr, aka, amh, bam, bem, ber, cgg, dag, dga, eng, ewe, fra, ful,
+      hau, ibo, kab, kau, kik, kin, kln, koo, kpo, led, lgg, lin, lth, lug, luo, luy,
+      mlg, myx, nbl, nya, nyn, orm, pcm, ruc, rwm, sna, som, sot, swa, teo, tsn, ttj,
+      wol, xho, xog, yor, zul]

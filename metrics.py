@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import functools
 import numbers
+import tqdm
 
 
 def _normalise(string_list,
@@ -146,9 +147,35 @@ def multilingual_eval_fn(eval_dataset,
     If `speech_processor` is defined, then it is used to decode the predictions.
     Otherwise `tokenizer` is used (e.g. for translation tasks).'''
 
-    df = pd.DataFrame(eval_dataset)
-    source_language = list(df['source.language'])
-    target_language = list(df['target.language'])
+    try:
+        from . import dataset as salt_dataset
+    except ImportError:
+        import dataset as salt_dataset
+
+    original_get_audio = salt_dataset._get_audio_from_row
+    
+    try:
+        # Mock audio extraction to bypass heavy CPU decoding
+        salt_dataset._get_audio_from_row = lambda row: (np.zeros(1), 16000)
+        
+        # Extract source and target languages efficiently
+        if hasattr(eval_dataset, "select_columns"):
+            # This prevents loading expensive features like audio arrays into memory
+            try:
+                eval_ds = eval_dataset.select_columns(["source.language", "target.language"])
+            except Exception:
+                eval_ds = eval_dataset
+        else:
+            eval_ds = eval_dataset
+
+        source_language = []
+        target_language = []
+        for item in tqdm.tqdm(eval_ds, desc="Extracting source and target languages"):
+            source_language.append(item['source.language'])
+            target_language.append(item['target.language']) 
+    finally:
+        # Restore the original method so Trainer evaluation loop works correctly
+        salt_dataset._get_audio_from_row = original_get_audio
 
     metric_names = []
     for m in metrics:
