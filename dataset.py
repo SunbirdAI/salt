@@ -73,7 +73,7 @@ def _add_speaker_id_studio_if_not_present(sample):
     return sample
 
 
-def _load_single_dataset(load_dataset_params, gcs_key_path=None):
+def _load_single_dataset(load_dataset_params, gcs_key_path=None, max_examples=None):
     # if path contains gcs://, then load with google_default token
     if "path" in load_dataset_params and "gcs://" in load_dataset_params["path"]:
         if gcs_key_path is None:
@@ -92,6 +92,9 @@ def _load_single_dataset(load_dataset_params, gcs_key_path=None):
     else:
         ds = datasets.load_dataset(**load_dataset_params)
 
+    if max_examples is not None:
+        ds = ds.select(range(min(len(ds), max_examples)))
+    
     if isinstance(ds, datasets.DatasetDict):
         split_names = list(ds.data.keys())
         # If the split wasn't specified, but there's only one, then just go
@@ -234,6 +237,7 @@ def _load_datasets(config):
 
     load_list = config["datasets"] if "datasets" in config else config["huggingface_load"]
     gcs_key_path = config.get("gcs_key_path")
+    max_examples = config.get("max_examples_per_dataset")
 
     # Optionally pre-download everything at once
     if config.get("download_datasets_in_parallel"):
@@ -242,7 +246,7 @@ def _load_datasets(config):
         # Explicitly initialize the tqdm lock in the main thread to prevent concurrent `del tqdm_class._lock` bugs
         import tqdm
         tqdm.tqdm.get_lock()
-        
+
         threads = []
         for l in _ensure_list(load_list):
             if "join" in l:
@@ -271,8 +275,12 @@ def _load_datasets(config):
                     "If a dataset join is specified, then there should be a "
                     f"list of exactly two datasets to be joined. Got: {l}."
                 )
-            left = _load_single_dataset(l["join"][0], gcs_key_path=gcs_key_path)
-            right = _load_single_dataset(l["join"][1], gcs_key_path=gcs_key_path)
+            left = _load_single_dataset(
+                l["join"][0], gcs_key_path=gcs_key_path, max_examples=max_examples
+            )
+            right = _load_single_dataset(
+                l["join"][1], gcs_key_path=gcs_key_path, max_examples=max_examples
+            )
 
             generator_function = lambda: _combine_datasets_generator(left, right)
             ds = datasets.IterableDataset.from_generator(generator_function)
@@ -282,7 +290,9 @@ def _load_datasets(config):
                 + _dataset_id_from_config(l["join"][1])
             )
         else:
-            ds = _load_single_dataset(l, gcs_key_path=gcs_key_path)
+            ds = _load_single_dataset(
+                l, gcs_key_path=gcs_key_path, max_examples=max_examples
+            )
             dataset_id = _dataset_id_from_config(l)
         loaded_datasets.append([ds, dataset_id])
 

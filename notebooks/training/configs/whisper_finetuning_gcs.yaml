@@ -171,6 +171,7 @@ train:
 validation:
   download_datasets_in_parallel: true
   gcs_key_path: gcs-data-viewer-key.json
+  max_examples_per_dataset: 50
   datasets:
   - path: gcs://sunflower-data/speech/ach_salt/dev/*.parquet
   - path: gcs://sunflower-data/speech/ach_waxal/dev/*.parquet
