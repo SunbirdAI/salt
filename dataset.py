@@ -487,14 +487,25 @@ def _create_generator(config, verbose=False):
         keys = list(batch.keys())
         rows = [{k: batch[k][i] for k in keys} for i in range(len(batch[keys[0]]))]
         for row in rows:
-            # The audio SALT datasets are in a slightly different format
-            # to the translation data, each row having a 'text' and 'language'
-            # field.
-            if "audio" in row and "text" in row:
-                row[row["language"] + "_text"] = row["text"]
-                del row["text"]
-            for match in _matching_pairs(row | {"origin_dataset": dataset_id}, config):
-                yield match
+            if config.get("skip_matching_asr"):
+                audio_array, sample_rate = _get_audio_from_row(row)
+                example = {
+                    "source": audio_array,
+                    "source.sample_rate": sample_rate,
+                    "source.language": row.get("language"),
+                    "target": row.get("text"),
+                    "target.language": row.get("language"),
+                }
+                yield example
+            else:    
+                # The audio SALT datasets are in a slightly different format
+                # to the translation data, each row having a 'text' and 'language'
+                # field.
+                if "audio" in row and "text" in row:
+                    row[row["language"] + "_text"] = row["text"]
+                    del row["text"]
+                for match in _matching_pairs(row | {"origin_dataset": dataset_id}, config):
+                    yield match
 
     # PyArrow data should be read in batches for speed.
     PYARROW_BATCH_SIZE = 10
@@ -573,10 +584,43 @@ def _create_generator(config, verbose=False):
                 for match in future.result():
                     yield match
     else:
-        # No shuffle: preserve strict order, process sequentially
-        for ds, dataset_id in loaded_datasets:
-            for batch in ds.iter(batch_size=PYARROW_BATCH_SIZE):
-                yield from _yield_matches(batch, config, dataset_id)
+        # No shuffle: preserve strict order, parallelize processing
+        def process_batch(args):
+            batch, config, dataset_id = args
+            return list(_yield_matches(batch, config, dataset_id))
+
+        prefetch_limit = 4 * num_workers
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
+            future_queue = queue.Queue()
+            
+            def batch_generator():
+                for ds, dataset_id in loaded_datasets:
+                    for batch in ds.iter(batch_size=PYARROW_BATCH_SIZE):
+                        yield batch, config, dataset_id
+            
+            batch_iter = batch_generator()
+            
+            # Prefill the queue
+            for _ in range(prefetch_limit):
+                try:
+                    args = next(batch_iter)
+                    future = executor.submit(process_batch, args)
+                    future_queue.put(future)
+                except StopIteration:
+                    break
+                    
+            while not future_queue.empty():
+                future = future_queue.get()
+                for match in future.result():
+                    yield match
+                
+                # Submit the next batch if available
+                try:
+                    args = next(batch_iter)
+                    next_future = executor.submit(process_batch, args)
+                    future_queue.put(next_future)
+                except StopIteration:
+                    continue
 
 
 def _compose(functions):

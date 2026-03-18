@@ -157,20 +157,10 @@ def multilingual_eval_fn(eval_dataset,
     try:
         # Mock audio extraction to bypass heavy CPU decoding
         salt_dataset._get_audio_from_row = lambda row: (np.zeros(1), 16000)
-        
-        # Extract source and target languages efficiently
-        if hasattr(eval_dataset, "select_columns"):
-            # This prevents loading expensive features like audio arrays into memory
-            try:
-                eval_ds = eval_dataset.select_columns(["source.language", "target.language"])
-            except Exception:
-                eval_ds = eval_dataset
-        else:
-            eval_ds = eval_dataset
 
         source_language = []
         target_language = []
-        for item in tqdm.tqdm(eval_ds, desc="Extracting source and target languages"):
+        for item in tqdm.tqdm(eval_dataset, desc="Extracting source and target languages"):
             source_language.append(item['source.language'])
             target_language.append(item['target.language']) 
     finally:
