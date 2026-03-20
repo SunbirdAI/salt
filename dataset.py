@@ -92,11 +92,8 @@ def _load_single_dataset(load_dataset_params, gcs_key_path=None, max_examples=No
     else:
         ds = datasets.load_dataset(**load_dataset_params)
 
-    if max_examples is not None:
-        ds = ds.select(range(min(len(ds), max_examples)))
-    
     if isinstance(ds, datasets.DatasetDict):
-        split_names = list(ds.data.keys())
+        split_names = list(ds.keys())
         # If the split wasn't specified, but there's only one, then just go
         # ahead and load that one.
         if len(split_names) == 1:
@@ -107,6 +104,9 @@ def _load_single_dataset(load_dataset_params, gcs_key_path=None, max_examples=No
                 "'split: train' or 'split: train+test'. Config provided: "
                 f"{load_dataset_params}. Splits found: {list(ds.keys())}."
             )
+
+    if max_examples is not None:
+        ds = ds.select(range(min(len(ds), max_examples)))
 
     remap_names = {
         "audio_language": "language",

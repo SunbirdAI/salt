@@ -16,7 +16,8 @@ training_args:
   gradient_accumulation_steps: 4
   learning_rate: 1.0e-05
   warmup_steps: 500
-  max_steps: 7500
+  # max_steps: 7500
+  num_train_epochs: 2
   gradient_checkpointing: true
   gradient_checkpointing_kwargs:
     use_reentrant: true
@@ -32,7 +33,7 @@ training_args:
   metric_for_best_model: loss
   greater_is_better: false
   push_to_hub: true
-  hub_model_id: huwenjie333/whisper-large-v3-salt-gcloud-test
+  hub_model_id: huwenjie333/whisper-large-v3-salt-2-gcloud
   save_total_limit: 2
 train:
   download_datasets_in_parallel: true
