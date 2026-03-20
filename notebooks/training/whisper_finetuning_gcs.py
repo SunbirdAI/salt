@@ -147,15 +147,30 @@ def load_datasets(config, feature_extractor, processor):
     val_data = valid_ds.map(prepare_dataset, remove_columns=["source", "target"])
     val_data = val_data.filter(lambda x: len(x["labels"]) <= 448)
 
+    train_data.approx_row_count = getattr(train_ds, "approx_row_count", None)
+    val_data.approx_row_count = getattr(valid_ds, "approx_row_count", None)
+
     return train_data, val_data
 
 
 def launch_training(model, processor, train_data, val_data, config):
+    training_args_dict = config["training_args"]
+
+    import math
+    if "num_train_epochs" in training_args_dict and getattr(train_data, 'approx_row_count', None):
+        num_epochs = training_args_dict["num_train_epochs"]
+        global_batch_size = training_args_dict.get("per_device_train_batch_size", 16) * training_args_dict.get("gradient_accumulation_steps", 4)
+        steps_per_epoch = math.ceil(train_data.approx_row_count / global_batch_size)
+        total_steps = math.ceil(num_epochs * steps_per_epoch)
+        print(f"Calculated approximate training steps based on approx_row_count ({train_data.approx_row_count}): {total_steps}")
+        training_args_dict["max_steps"] = total_steps
+
     training_args = transformers.Seq2SeqTrainingArguments(
-        **config["training_args"],
+        **training_args_dict,
         report_to= ["mlflow"]
     )
-    print("training arguments:\n", config['training_args'])
+    print("training arguments:\n", training_args_dict)
+    print(f"Total training steps to run: {training_args.max_steps}")
 
     data_collator = DataCollatorSpeechSeq2SeqWithPadding(
         processor=processor, decoder_start_token_id=model.config.decoder_start_token_id)
@@ -174,15 +189,6 @@ def launch_training(model, processor, train_data, val_data, config):
         compute_metrics=compute_metrics,
         processing_class=processor,
     )
-
-    import math
-    train_dataloader = trainer.get_train_dataloader()
-    num_update_steps_per_epoch = math.ceil(len(train_dataloader) / training_args.gradient_accumulation_steps)
-    total_steps = math.ceil(training_args.num_train_epochs * num_update_steps_per_epoch)
-    
-    print("=" * 50)
-    print(f"Total training steps to run: {total_steps}")
-    print("=" * 50)
 
     trainer.train()   
 

@@ -83,7 +83,7 @@ def multilingual_eval(eval_preds,
                   f'True label: "{decoded_labels[i]}"')
 
     subsets = {}
-    for i in range(len(decoded_predictions)):
+    for i in tqdm.tqdm(range(len(decoded_predictions)), desc="Grouping language subsets"):
         if speech_processor:
             # For speech metrics, such as WER, we evaluate for separate target
             # languages.

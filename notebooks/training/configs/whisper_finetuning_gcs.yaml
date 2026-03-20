@@ -156,9 +156,24 @@ train:
       mlg, myx, nbl, nya, nyn, orm, pcm, ruc, rwm, sna, som, sot, swa, teo, tsn, ttj,
       wol, xho, xog, yor, zul]
     preprocessing:
+    # Downsample some examples to 8KHz (to simulate phone audio) 
     - set_sample_rate:
-        rate: 16000
+        rate: 8_000
+        p: 0.2
+    # Then upsample again
+    - set_sample_rate:
+        rate: 16_000
     - normalize_audio
+    - augment_audio_speed:
+        p: 0.2
+        low: 0.95
+        high: 1.15
+    - augment_audio_noise:
+        max_relative_amplitude: 0.5
+        noise_audio_repo:
+            path: Sunbird/urban-noise
+            name: small
+            split: train  
   target:
     type: text
     preprocessing:
@@ -293,8 +308,7 @@ validation:
       wol, xho, xog, yor, zul]
     preprocessing:
     - set_sample_rate:
-        rate: 16000
-    - normalize_audio
+        rate: 16_000
   target:
     type: text
     language: [ach, afr, aka, amh, bam, bem, ber, cgg, dag, dga, eng, ewe, fra, ful,

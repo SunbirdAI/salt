@@ -481,9 +481,8 @@ def _matching_pairs(row, config):
             yield example
 
 
-def _create_generator(config, verbose=False):
+def _create_generator(loaded_datasets, config, verbose=False):
     """Make a generator that yields examples according to dataset spec."""
-    loaded_datasets = _load_datasets(config)
 
     if verbose:
         total_row_count = 0
@@ -744,8 +743,12 @@ def create(config, verbose=False):
                 f"{language}. Change to [{language}] to make it a list."
             )
 
-    generator_function = lambda: _create_generator(config, verbose=verbose)
+    loaded_datasets = _load_datasets(config)
+    total_row_count = sum(len(ds) for ds, id in loaded_datasets)
+
+    generator_function = lambda: _create_generator(loaded_datasets, config, verbose=verbose)
     ds = datasets.IterableDataset.from_generator(generator_function)
+    ds.approx_row_count = total_row_count
 
     # The individual datasets are already shuffled as needed, but do a little
     # more so that consecutive samples are from different batches.
@@ -760,4 +763,5 @@ def create(config, verbose=False):
         ds = ds.select_columns(
             ["source", "target", "source.language", "target.language"]
         )
+    ds.approx_row_count = total_row_count
     return ds
