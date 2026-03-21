@@ -169,12 +169,12 @@ train:
         p: 0.2
         low: 0.95
         high: 1.15
-    - augment_audio_noise:
-        max_relative_amplitude: 0.5
-        noise_audio_repo:
-            path: Sunbird/urban-noise
-            name: small
-            split: train  
+    # - augment_audio_noise:
+    #     max_relative_amplitude: 0.5
+    #     noise_audio_repo:
+    #         path: Sunbird/urban-noise
+    #         name: small
+    #         split: train  
   target:
     type: text
     preprocessing:
