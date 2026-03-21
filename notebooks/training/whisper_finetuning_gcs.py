@@ -97,7 +97,7 @@ def load_model_pack(config):
 
 def load_datasets(config, feature_extractor, processor):
     train_ds = salt.dataset.create(config['train'], verbose=True)
-    valid_ds = salt.dataset.create(config['validation'], verbose=True)
+    valid_ds = salt.dataset.create(config['validation'])
 
     def inspect_example(dataset):
         for i, example in enumerate(dataset.take(1)):
@@ -180,6 +180,36 @@ def launch_training(model, processor, train_data, val_data, config):
       processor.tokenizer, log_first_N_predictions=5,
       speech_processor=processor)
 
+    # --- Debug callback to track model.generate() progress per batch ---
+    import time as _time
+
+    class EvalProgressCallback(transformers.TrainerCallback):
+        def __init__(self):
+            self._batch_count = 0
+            self._eval_start = _time.time()
+
+        def on_evaluate(self, args, state, control, **kwargs):
+            self._batch_count = 0
+            self._eval_start = _time.time()
+            print(f"\n[EVAL] Starting evaluation at step {state.global_step}", flush=True)
+
+        def on_prediction_step(self, args, state, control, **kwargs):
+            self._batch_count += 1
+            elapsed = _time.time() - self._eval_start
+            examples_done = self._batch_count * args.per_device_eval_batch_size
+            rate = examples_done / elapsed if elapsed > 0 else 0
+            print(f"[EVAL] Batch {self._batch_count} done | "
+                  f"~{examples_done} examples | "
+                  f"{elapsed:.1f}s elapsed | "
+                  f"{rate:.1f} examples/s", flush=True)
+
+        def on_log(self, args, state, control, logs=None, **kwargs):
+            if logs and any(k.startswith("eval_") for k in logs):
+                total_time = _time.time() - self._eval_start
+                print(f"\n[EVAL] ✅ Evaluation complete in {total_time:.1f}s "
+                      f"({self._batch_count} batches)")
+                print(f"{'='*60}\n", flush=True)
+
     trainer = transformers.Seq2SeqTrainer(
         args=training_args,
         model=model,
@@ -189,6 +219,8 @@ def launch_training(model, processor, train_data, val_data, config):
         compute_metrics=compute_metrics,
         processing_class=processor,
     )
+
+    trainer.add_callback(EvalProgressCallback())
 
     trainer.train()   
 

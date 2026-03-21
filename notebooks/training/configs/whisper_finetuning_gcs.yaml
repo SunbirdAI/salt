@@ -16,8 +16,8 @@ training_args:
   gradient_accumulation_steps: 4
   learning_rate: 1.0e-05
   warmup_steps: 500
-  # max_steps: 7500
-  num_train_epochs: 2
+  max_steps: 8000
+  # num_train_epochs: 2
   gradient_checkpointing: true
   gradient_checkpointing_kwargs:
     use_reentrant: true
@@ -26,8 +26,9 @@ training_args:
   eval_strategy: steps
   predict_with_generate: true
   generation_max_length: 200
-  save_steps: 250
-  eval_steps: 250
+  generation_num_beams: 1
+  save_steps: 1000
+  eval_steps: 1000
   logging_steps: 50
   load_best_model_at_end: true
   metric_for_best_model: loss
@@ -187,7 +188,7 @@ train:
 validation:
   download_datasets_in_parallel: true
   gcs_key_path: gcs-data-viewer-key.json
-  max_examples_per_dataset: 50
+  max_examples_per_dataset: 20
   datasets:
   - path: gcs://sunflower-data/speech/ach_salt/dev/*.parquet
   - path: gcs://sunflower-data/speech/ach_waxal/dev/*.parquet

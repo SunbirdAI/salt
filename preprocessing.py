@@ -309,6 +309,14 @@ def augment_audio_noise(r,
         noise_idx = np.random.randint(0, noise_dataset.num_rows)
         noise_sample = np.array(noise_dataset[noise_idx]['audio']['array'])
         
+        # If noise sample is empty, fall back to synthetic white noise
+        if len(noise_sample) == 0:
+            noise = np.random.uniform(-amplitude, amplitude, size=num_samples_to_affect)
+            x_with_noise = np.copy(x)
+            x_with_noise[start_index:start_index + num_samples_to_affect] += noise
+            r[src_or_tgt] = x_with_noise
+            return r
+        
         # If noise sample is too short, repeat it
         if len(noise_sample) < num_samples_to_affect:
             repeats = int(np.ceil(num_samples_to_affect / len(noise_sample)))
