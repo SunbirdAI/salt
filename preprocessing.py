@@ -197,7 +197,7 @@ def augment_audio_speed(r, src_or_tgt, p=0.5, low=0.95, high=1.15):
         r[src_or_tgt] = x_with_speed_change
         
     return r
-    
+
 
 class NoiseAugmenter:
     """Class to handle noise augmentation with lazy loading of noise datasets."""
@@ -282,7 +282,7 @@ def augment_audio_noise(r,
     x = r[src_or_tgt]
     if not isinstance(x, np.ndarray):
         x = np.array(x)
-        
+
     # Do nothing for empty inputs
     if not len(x):
         return r
@@ -296,7 +296,15 @@ def augment_audio_noise(r,
     coverage = np.random.uniform(min_coverage, max_coverage)
     num_samples_to_affect = int(len(x) * coverage)
     start_index = np.random.randint(0, len(x) - num_samples_to_affect)
-    
+
+    # Guard: if num_samples_to_affect is 0, nothing to do
+    if num_samples_to_affect == 0:
+        print(
+            f"[augment_audio_noise] Skipping: num_samples_to_affect=0 "
+            f"[augment_audio_noise] (len(x)={len(x)}, coverage={coverage:.2f})"
+        )
+        return r
+
     if noise_audio_repo is None:
         # Use synthetic white noise
         noise = np.random.uniform(-amplitude, amplitude, size=num_samples_to_affect)
@@ -304,29 +312,29 @@ def augment_audio_noise(r,
         # Get the singleton instance and load dataset if needed
         noise_augmenter = NoiseAugmenter()
         noise_dataset = noise_augmenter.get_noise_dataset(noise_audio_repo)
-        
+
         # Randomly select a noise sample
         noise_idx = np.random.randint(0, noise_dataset.num_rows)
         noise_sample = np.array(noise_dataset[noise_idx]['audio']['array'])
-        
-        # If noise sample is empty, fall back to synthetic white noise
-        if len(noise_sample) == 0:
-            noise = np.random.uniform(-amplitude, amplitude, size=num_samples_to_affect)
-            x_with_noise = np.copy(x)
-            x_with_noise[start_index:start_index + num_samples_to_affect] += noise
-            r[src_or_tgt] = x_with_noise
-            return r
-        
+
         # If noise sample is too short, repeat it
         if len(noise_sample) < num_samples_to_affect:
             repeats = int(np.ceil(num_samples_to_affect / len(noise_sample)))
             noise_sample = np.tile(noise_sample, repeats)
-            
+
         # If noise sample is too long, take a random segment
         if len(noise_sample) > num_samples_to_affect:
             noise_start = np.random.randint(0, len(noise_sample) - num_samples_to_affect)
             noise_sample = noise_sample[noise_start:noise_start + num_samples_to_affect]
-            
+
+        # If noise sample is empty, return the origanl audio
+        if len(noise_sample) == 0:
+            print(
+                f"[augment_audio_noise] Skipping empty noise sample"
+                f"[augment_audio_noise] len(x)={len(x)}, coverage={coverage:.2f}), num_samples_to_affect={num_samples_to_affect}"
+            )
+            return r
+
         # Normalize noise amplitude
         noise_max = np.amax(np.abs(noise_sample))
         if noise_max > 0:  # Avoid division by zero
@@ -337,7 +345,7 @@ def augment_audio_noise(r,
     # Apply noise to the chosen segment
     x_with_noise = np.copy(x)  # Make a copy of x to prevent altering the original
     x_with_noise[start_index:start_index + num_samples_to_affect] += noise
-    
+
     r[src_or_tgt] = x_with_noise
     return r
 
@@ -389,7 +397,7 @@ def clean_and_remove_punctuation(
         
     r[src_or_tgt] = ''.join([c for c in r[src_or_tgt] if c not in punct])
     return r
-    
+
 @single_batch_entry
 def lower_case(r, src_or_tgt):
     r[src_or_tgt] = r[src_or_tgt].lower()
@@ -410,6 +418,5 @@ def set_sample_rate(r, src_or_tgt, rate, p=1.0):
     return r
 
 # TODO: Check that the order of preprocessing operations makes sense. For
-# example, don't call match_target_sentence_format_to_source after 
+# example, don't call match_target_sentence_format_to_source after
 # prefix_dataset_tag (because then the tag is part of the text)
-    
