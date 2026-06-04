@@ -54,7 +54,11 @@ class TestPreprocessing(unittest.TestCase):
         
     def test_augment_characters(self):
         record = {'source': ['source text']}
-        char_augmentation_params = {'action': 'swap'}
+        char_augmentation_params = {
+            'action': 'swap',
+            'aug_char_p': 1.0,
+            'aug_word_p': 1.0,
+        }
         result = preprocessing.augment_characters(
             record, 'source', **char_augmentation_params)
         # Check that augmentation occurred

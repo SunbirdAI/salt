@@ -1,7 +1,6 @@
 import unittest
 from unittest.mock import MagicMock, patch
 import numpy as np
-import evaluate
 
 from salt.metrics import multilingual_eval, multilingual_eval_fn
 
@@ -14,12 +13,19 @@ def create_mock_tokenizer():
     mock_tokenizer.pad_token_id = 0
     return mock_tokenizer
 
+
+class FakeBleuMetric:
+    def compute(self, predictions, references):
+        if predictions == references:
+            return {'score': 100.0}
+        return {'score': 35.355}
+
 # Define our unit test case
 class MultilingualEvalUnitTest(unittest.TestCase):
     
     def test_multilingual_eval(self):
         mock_tokenizer = create_mock_tokenizer()
-        metric = evaluate.load('sacrebleu')
+        metric = FakeBleuMetric()
 
         predictions = np.array([[1, 2, 3, 4], [4, 5, 6, 6]])
         labels = np.array([[1, 2, 3, 4], [4, 5, 3, 6]])
