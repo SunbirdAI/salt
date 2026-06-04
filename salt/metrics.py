@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 import functools
 
+__all__ = ["multilingual_eval", "multilingual_eval_fn"]
+
 def multilingual_eval(eval_preds,
                       source_language,
                       target_language,

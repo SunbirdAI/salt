@@ -37,11 +37,20 @@ import random
 import cleantext
 import functools
 import numpy as np
-import librosa
-import nlpaug.augmenter.word as naw
-import nlpaug.augmenter.char as nac
 
-from .utils import single_batch_entry
+from salt.utils import single_batch_entry
+
+__all__ = [
+    "prefix_target_language",
+    "match_target_sentence_format_to_source",
+    "clean_text",
+    "augment_characters",
+    "augment_words",
+    "clean_and_remove_punctuation",
+    "lower_case",
+    "random_capitalise_source_and_target",
+    "set_sample_rate",
+]
 
 
 @single_batch_entry
@@ -79,11 +88,15 @@ def clean_text(r, src_or_tgt, **clean_text_args):
     return r
 
 def augment_characters(r, src_or_tgt, **char_augmentation_params):
+    import nlpaug.augmenter.char as nac
+
     char_augmenter = nac.RandomCharAug(**char_augmentation_params)
     r[src_or_tgt] = char_augmenter.augment(r[src_or_tgt])
     return r
 
 def augment_words(r, src_or_tgt, **word_augmentation_params):
+    import nlpaug.augmenter.word as naw
+
     word_augmenter = naw.RandomWordAug(**word_augmentation_params)
     r[src_or_tgt] = word_augmenter.augment(r[src_or_tgt])
     return r
@@ -112,6 +125,8 @@ def random_capitalise_source_and_target(r, src_or_tgt, p=0.005):
 @single_batch_entry
 def set_sample_rate(r, src_or_tgt, rate):
     '''Resamples audio data, if the sample rate in the record is different.'''
+    import librosa
+
     current_sample_rate = r[f'{src_or_tgt}.sample_rate']
     if current_sample_rate != rate:
         audio_data = np.array(r[src_or_tgt])

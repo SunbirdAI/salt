@@ -11,7 +11,7 @@ import random
 import string
 import warnings
 
-from . import dataset
+from salt import dataset
 
 
 @unittest.mock.patch.dict(os.environ, {"HF_DATASETS_DISABLE_PROGRESS_BARS": "1"})
@@ -760,4 +760,3 @@ class DatasetTestCase(unittest.TestCase):
         
 if __name__ == '__main__':
     unittest.main()
-

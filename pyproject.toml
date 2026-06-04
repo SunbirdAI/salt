@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sb-salt"
+version = "0.1.0"
+description = "Language experimentation tools to accompany the SALT dataset"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.9"
+authors = [{ name = "Sunbird AI", email = "info@sunbird.ai" }]
+
+dependencies = [
+    "datasets>=3.4.0",
+    "huggingface-hub<1.0",
+    "nlpaug",
+    "pandas",
+    "numpy",
+    "librosa",
+    "unidecode",
+    "clean-text",
+    "evaluate",
+    "sacrebleu",
+    "soundfile>=0.12.1",
+    "jiwer",
+    "transformers",
+]
+
+[project.optional-dependencies]
+torch = ["torch", "torchcodec"]
+dev   = ["pytest", "ipython", "mlflow", "build", "twine"]
+all   = ["sb-salt[torch,dev]"]
+
+[project.urls]
+Homepage   = "https://github.com/SunbirdAI/salt"
+Repository = "https://github.com/SunbirdAI/salt"
+
+[tool.setuptools.packages.find]
+where   = ["."]
+include = ["salt*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -2,7 +2,7 @@ import unittest
 import re
 import numpy as np
 
-from . import preprocessing
+from salt import preprocessing
 
 class TestPreprocessing(unittest.TestCase):
 

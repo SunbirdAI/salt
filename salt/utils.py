@@ -1,9 +1,12 @@
 from dataclasses import dataclass
 import functools
-from typing import Union
+from typing import TYPE_CHECKING, Union
 import pandas as pd
-from IPython import display
-import transformers
+
+if TYPE_CHECKING:
+    import transformers
+
+__all__ = ["single_batch_entry", "show_dataset", "DataCollatorCTCWithPadding"]
 
 def single_batch_entry(func):
     """Split a batch into individual items, process and then recombine."""
@@ -21,6 +24,8 @@ def single_batch_entry(func):
 
 def show_dataset(ds, N=10, rate=16_000, audio_features=[]):
     '''Show dataset inside a Jupyter notebook with embedded audio.'''
+    from IPython import display
+
     def create_audio_player_from_array(audio_data):   
         if isinstance(audio_data, dict) and 'array' in audio_data:
             audio_player = display.Audio(data=audio_data['array'], rate=rate)
@@ -58,7 +63,7 @@ class DataCollatorCTCWithPadding:
     """
     # TODO: Check updated version at https://github.com/huggingface/transformers/blob/main/examples/pytorch/speech-recognition/run_speech_recognition_ctc.py
 
-    processor: transformers.Wav2Vec2Processor
+    processor: "transformers.Wav2Vec2Processor"
     padding: Union[bool, str] = True
 
     def __call__(self, features):

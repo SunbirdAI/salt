@@ -1,6 +1,14 @@
 # SALT 💬
 Language experimentation tools to accompany the SALT dataset
 
+## Installation
+```bash
+pip install sb-salt
+
+# With PyTorch support
+pip install sb-salt[torch]
+```
+
 ## Docs
 After editing the documentation .md file
 

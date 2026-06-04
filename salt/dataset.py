@@ -7,7 +7,9 @@ import types
 import heapq
 import numpy as np
 
-from . import preprocessing
+from salt import preprocessing
+
+__all__ = ["create"]
 
 _PREPROCESS_LIST_HELP_STRING = '''
 Preprocessing operations should be specified as a list in yaml, for example:

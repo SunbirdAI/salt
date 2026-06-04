@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import evaluate
 
-from .metrics import multilingual_eval, multilingual_eval_fn
+from salt.metrics import multilingual_eval, multilingual_eval_fn
 
 # Helper function to create a mock tokenizer
 def create_mock_tokenizer():
@@ -40,8 +40,8 @@ class MultilingualEvalUnitTest(unittest.TestCase):
                                    log_first_N_predictions)
 
         # Assert: Check if the output matches the expected result
-        self.assertAlmostEqual(result['BLEU_lug_nyn'], 100.0)
-        self.assertAlmostEqual(result['BLEU_ach_teo'], 35.355)
+        self.assertAlmostEqual(result['BLEU_lug2nyn'], 100.0)
+        self.assertAlmostEqual(result['BLEU_ach2teo'], 35.355)
         # Assert function calls of tokenizer
         mock_tokenizer.batch_decode.assert_called()
         
