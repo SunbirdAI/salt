@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sb-salt"
-version = "0.1.2"
+version = "0.1.0"
 description = "Language experimentation tools to accompany the SALT dataset"
 readme = "README.md"
 license = { text = "Apache-2.0" }

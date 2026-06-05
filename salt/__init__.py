@@ -8,7 +8,7 @@ from salt.metrics import __all__ as _metrics_all
 from salt.preprocessing import __all__ as _preprocessing_all
 from salt.utils import __all__ as _utils_all
 
-__version__ = "0.1.2"
+__version__ = "0.1.0"
 
 __all__ = [
     "__version__",
