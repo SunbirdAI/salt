@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - "v*"
-    branches:
-      - "sb-salt"
 
 jobs:
   test:
@@ -14,6 +12,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Verify tag is on sb-salt
+        run: |
+          if ! git branch -r --contains "$GITHUB_SHA" | grep -q "origin/sb-salt"; then
+            echo "Release tags must point to commits on the sb-salt branch."
+            exit 1
+          fi
 
       - uses: actions/setup-python@v5
         with:
