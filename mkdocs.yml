@@ -173,36 +173,37 @@ markdown_extensions:
 nav:
   - SALT: index.md
   - Getting Started:
-      - "Introduction": tutorials/01-introduction.md
-      - "Installation": tutorials/02-installation.md
-      # - "Quick Tour": tutorials/03-quick-tour.md
-  - Sunflower:
-      - API:
-          - "Getting started": sunflower/sunflower.md
-      - Quantization:
-          - "Overview": sunflower/overview.md
-          - "inference": sunflower/inference.md
-          - "LoRA Fine-tuned Models to GGUF": sunflower/quantization.md
-
-  - Tutorials:
-      - Beginner:
-          - "Basics": tutorials/04-basics.md
-          # - "Data Exploration": tutorials/05-data-exploration.md
-      - SALT Datasets: tutorials/07-speech-datasets.md
-      - SALT Models:
-          - "Translation Models": tutorials/08-translation-models.md
-          - "ASR Models": tutorials/09-asr-models.md
-          - "TTS Models": tutorials/10-tts-spark-models.md
-      - SALT Pipelines:
-          - "Data Loading": tutorials/11-data-loading.md
-          - "Training": tutorials/12-training.md
-      - Speaker Diarization:
+      - "Overview & Installation": tutorials/overview.md
+  - Datasets:
+      - "SALT": datasets/salt.md
+      - "SALT-31": datasets/salt-31.md
+      - "Urban Noise Uganda 61k": datasets/urban-noise-uganda-61k.md
+  - Models:
+      - "Sunflower-14B": models/sunflower-14b.md
+      - "Sunflower-32B": models/sunflower-32b.md
+      - "Sunflower-14B FP8": models/sunflower-14b-fp8.md
+      - "Sunflower-14B W8A8": models/sunflower-14b-w8a8.md
+      - "Sunflower-14B FP4A16": models/sunflower-14b-fp4a16.md
+      - "Sunflower-14B GGUF": models/sunflower-14b-gguf.md
+      - "Whisper Large v3 SALT (ASR)": models/asr-whisper-large-v3-salt.md
+      - "Orpheus 3B TTS Multilingual (TTS)": models/orpheus-3b-tts-multilingual.md
+      - "SunbirdTutor Gemma 4 E2B": models/sunbirdtutor-gemma-4-e2b.md
+  - SALT Python Package:
+      - "Data Loading": tutorials/data-loading.md
+      - "Data Preprocessing": tutorials/preprocessing.md
+      - "Model Training": tutorials/training.md
+      - "Evaluation Metrics": tutorials/evaluation.md
+      - "Translation Models": tutorials/08-translation-models.md
+      - "ASR Models": tutorials/09-asr-models.md
+      - "TTS Models": tutorials/10-tts-spark-models.md
+      - "Speaker Diarization":
           - "Diarization": tutorials/13-diarization.md
-          - "Fine-Tuning Diarization": tutorials/14-diarization-training.md
-          - "Diarization evaluation": "tutorials/15-diarization-evaluation.md"
-  - API:
-      - Sunbird AI API: API/index.md
-  - Reference:
+          - "Fine-Tuning": tutorials/14-diarization-training.md
+          - "Evaluation": tutorials/15-diarization-evaluation.md
+      - "Quantized Inference":
+          - "Overview": sunflower/overview.md
+          - "Inference": sunflower/inference.md
+          - "LoRA to GGUF": sunflower/quantization.md
       - "Reference": reference.md
   # - Blog:
   #     - Intro: blog/index.md

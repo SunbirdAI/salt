@@ -1,37 +1,24 @@
 # SALT Documentation
 
-## Welcome to the SALT project documentation!
+Welcome to the official documentation for the **SALT** project, part of the [Sunbird AI Language Projects](https://sunbird.ai/portfolio/african-languages/). 
 
-This documentation serves as the official guide for the [**SALT**](https://github.com/SunbirdAI/salt) project, which is part of the [Sunbird AI Language Projects](https://sunbird.ai/portfolio/african-languages/). The goal of this documentation is to provide you with comprehensive information on how to use the Leb project effectively.
+This documentation covers our datasets, open-source models, and the SALT Python library designed to support speech and language technology for African languages.
 
-<!-- ## Table Of Contents
+## Datasets
+We build and curate high-quality datasets to advance research and application of machine learning for low-resource African languages:
+- **[SALT](datasets/salt.md)**: A multi-way parallel text and speech corpus covering English and six widely spoken languages in Uganda and East Africa.
+- **[SALT-31](datasets/salt-31.md)**: A context-aware Machine Translation evaluation benchmark covering 31 Ugandan and regional languages.
+- **[Urban Noise Uganda 61k](datasets/urban-noise-uganda-61k.md)**: A dataset for urban environmental acoustic monitoring in Uganda.
 
-- [💬 SALT](index.md)
-- [Getting Started](#getting-started)
-    - [Introduction](tutorials/01-introduction.md)
-    - [Installation](tutorials/02-installation.md)
-    - [Quick Tour](tutorials/03-quick-tour.md)
-- [Tutorials](#tutorials)
-    - [Beginner](#beginner)
-        - [Basics](tutorials/04-basics.md)
-        - [Data Exploration](tutorials/05-data-exploration.md)
-    - [SALT Datasets](#salt-datasets)
-        - [Text Datasets](tutorials/06-text-datasets.md)
-        - [Speech Datasets](tutorials/07-speech-datasets.md)
-    - [SALT Models](#salt-models)
-        - [Translation Models](tutorials/08-translation-models.md)
-        - [ASR Models](tutorials/09-asr-models.md)
-        - [TTS Models](tutorials/10-tts-spark-models.md)
-    - [SALT Pipelines](#salt-pipelines)
-        - [Data Loading](tutorials/11-data-loading.md)
-        - [Training](tutorials/12-training.md)
-    - [Speaker Diarization](#diarization)
-        - [Diarization](tutorials/13-diarization.md)
-        - [Fine-Tuning](tutorials/14-diarization-training.md)
+## Models
+We release highly-optimized models trained for translation, speech recognition, and synthesis:
+- **[Sunflower-14B](models/sunflower-14b.md) & [Sunflower-32B](models/sunflower-32b.md)**: Our flagship multilingual language models for Ugandan languages and English, including various quantized formats (FP8, W8A8, FP4A16, GGUF).
+- **[Whisper Large v3 SALT](models/asr-whisper-large-v3-salt.md)**: An Automatic Speech Recognition (ASR) model fine-tuned on Ugandan languages.
+- **[Orpheus 3B TTS Multilingual](models/orpheus-3b-tts-multilingual.md)**: A Text-to-Speech (TTS) model supporting voice generation across Ugandan languages.
+- **[SunbirdTutor Gemma 4 E2B](models/sunbirdtutor-gemma-4-e2b.md)**: A specialized educational model.
 
-- [Reference Docs](#reference)
-    - [Reference](reference.md)
-
-Quickly find what you're looking for depending on your use case by looking at the different sections and subsections.
-
- -->
+## 📦 SALT Python Package
+The `salt` Python package provides helper utilities and pipelines for convenient experimentation, training, and deployment:
+- **Getting Started**: Read the [Overview & Installation](tutorials/overview.md) guide.
+- **Developer Guides**: Master [Data Loading](tutorials/data-loading.md), [Data Preprocessing](tutorials/preprocessing.md), [Model Training](tutorials/training.md), and [Evaluation Metrics](tutorials/evaluation.md).
+- **Core Pipelines**: See guides for [Translation Models](tutorials/08-translation-models.md), [ASR Models](tutorials/09-asr-models.md), [TTS Models](tutorials/10-tts-spark-models.md), and [Speaker Diarization](tutorials/13-diarization.md).
