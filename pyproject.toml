@@ -1,0 +1,14 @@
+[project]
+name = "salt"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "material>=0.1",
+    "mkdocs<2.0",
+    "mkdocs-material>=9.7.6",
+    "mkdocs-minify-plugin>=0.8.0",
+    "mkdocstrings>=1.0.4",
+    "mkdocstrings-python>=2.0.5",
+]
