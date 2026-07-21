@@ -179,14 +179,17 @@ nav:
       - "SALT-31": datasets/salt-31.md
       - "Urban Noise Uganda 61k": datasets/urban-noise-uganda-61k.md
   - Models:
+      - "Sunflower-Qwen3.5-9B": models/sunflower-qwen3.5-9b.md
       - "Sunflower-14B": models/sunflower-14b.md
       - "Sunflower-32B": models/sunflower-32b.md
       - "Sunflower-14B FP8": models/sunflower-14b-fp8.md
       - "Sunflower-14B W8A8": models/sunflower-14b-w8a8.md
       - "Sunflower-14B FP4A16": models/sunflower-14b-fp4a16.md
       - "Sunflower-14B GGUF": models/sunflower-14b-gguf.md
+      - "Whisper 51 African Languages (ASR)": models/asr-whisper-51-african-languages.md
       - "Whisper Large v3 SALT (ASR)": models/asr-whisper-large-v3-salt.md
       - "Orpheus 3B TTS Multilingual (TTS)": models/orpheus-3b-tts-multilingual.md
+      - "Sunflower-Gemma4-E2B": models/sunflower-gemma4-e2b.md
       - "SunbirdTutor Gemma 4 E2B": models/sunbirdtutor-gemma-4-e2b.md
   - SALT Python Package:
       - "Data Loading": tutorials/data-loading.md
