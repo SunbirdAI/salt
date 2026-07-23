@@ -151,6 +151,8 @@ Sunflower-Gemma4-E2B is intended for developers building text and speech applica
 
 ## How to Load / Run
 
+You can try the model directly using this [Colab Notebook](https://colab.research.google.com/drive/1P39eYR_KW16oH8tBzycjHG86RfxiRKMJ?usp=sharing)
+
 Sunflower-Gemma4-E2B follows standard Transformers patterns, but expects specific prompt formats for translation and speech transcription. Like Qwen, the base model supports a reasoning phase, but we recommend setting `enable_thinking=False` for standard translation tasks.
 
 ### Text Translation
