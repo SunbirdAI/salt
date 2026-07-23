@@ -139,6 +139,7 @@ Sunflower-Qwen3.5-9B is intended for developers building text applications in Af
 - Like any LLM, it can produce fluent, confident and wrong output. This matters more in low-resource languages, where errors are harder for non-speakers to spot.
 
 ## How to Load / Run
+You can try the model directly using this [Colab Notebook](https://colab.research.google.com/drive/1hz7NfcA2GgkS-h6wTZ--6tS_IGtwTEEj)
 
 Sunflower-Qwen3.5-9B follows the same usage pattern as the base Qwen3.5-9B model, though it expects prompts for some tasks in a certain format as specified below. Like Qwen3.5, the model supports a `<think>` reasoning phase. Reasoning has not yet been optimised so we recommend setting `enable_thinking=False`, especially for translation tasks.
 
