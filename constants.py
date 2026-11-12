@@ -178,3 +178,106 @@ SALT_LANGUAGE_TOKENS_NLLB_TRANSLATION = {
     'soc': 256039,
     'tlj': 256040,
 }
+
+# NLLB-200 language codes for the 69-language (salt-69) NLLB models.
+# Unlike SALT_LANGUAGE_TOKENS_NLLB_TRANSLATION above (kept as-is for existing
+# deployed models), this mapping uses NLLB's own code wherever NLLB supports the
+# language. Languages NLLB doesn't support reuse the code of a European language
+# that these models never translate, so the pretrained code token is
+# "repurposed". Resolve token ids with tokenizer.convert_tokens_to_ids(code),
+# and check with nllb_69_language_token_ids().
+SALT_LANGUAGE_CODES_NLLB_69 = {
+    # Native NLLB codes
+    'eng': 'eng_Latn',
+    'ibo': 'ibo_Latn',
+    'lug': 'lug_Latn',
+    'swa': 'swh_Latn',
+    'kin': 'kin_Latn',
+    'luo': 'luo_Latn',
+    'afr': 'afr_Latn',
+    'aka': 'aka_Latn',
+    'amh': 'amh_Ethi',
+    'bam': 'bam_Latn',
+    'bem': 'bem_Latn',
+    'ber': 'tzm_Tfng',  # Training data is Tifinagh script
+    'nya': 'nya_Latn',
+    'din': 'dik_Latn',
+    'ewe': 'ewe_Latn',
+    'fra': 'fra_Latn',
+    'ful': 'fuv_Latn',
+    'kik': 'kik_Latn',
+    'hau': 'hau_Latn',
+    'kab': 'kab_Latn',
+    'kau': 'knc_Latn',
+    'run': 'run_Latn',
+    'lin': 'lin_Latn',
+    'mlg': 'plt_Latn',
+    'orm': 'gaz_Latn',
+    'sot': 'sot_Latn',
+    'sna': 'sna_Latn',
+    'som': 'som_Latn',
+    'tsn': 'tsn_Latn',
+    'wol': 'wol_Latn',
+    'xho': 'xho_Latn',
+    'yor': 'yor_Latn',
+    'zul': 'zul_Latn',
+    # Repurposed codes (the NLLB language named in each code is not used)
+    'ach': 'fur_Latn',
+    'lgg': 'lij_Latn',
+    'nyn': 'lim_Latn',
+    'teo': 'lmo_Latn',
+    'xog': 'ltg_Latn',
+    'ttj': 'scn_Latn',
+    'myx': 'srd_Latn',
+    'adh': 'szl_Latn',
+    'alz': 'vec_Latn',
+    'bfa': 'ast_Latn',
+    'cgg': 'fao_Latn',
+    'gwr': 'oci_Latn',
+    'ikx': 'gla_Latn',
+    'kdi': 'gle_Latn',
+    'kdj': 'cym_Latn',
+    'keo': 'eus_Latn',
+    'koo': 'epo_Latn',
+    'kpz': 'ltz_Latn',
+    'laj': 'mlt_Latn',
+    'led': 'isl_Latn',
+    'lsm': 'als_Latn',
+    'lth': 'bos_Latn',
+    'luc': 'hrv_Latn',
+    'lzm': 'slv_Latn',
+    'mhi': 'slk_Latn',
+    'ndp': 'lit_Latn',
+    'pok': 'lvs_Latn',
+    'rub': 'est_Latn',
+    'ruc': 'fin_Latn',
+    'rwm': 'hun_Latn',
+    'sbx': 'ces_Latn',
+    'soc': 'ron_Latn',
+    'tlj': 'nno_Latn',
+    'nuj': 'nob_Latn',
+    'nyo': 'dan_Latn',
+    'dga': 'swe_Latn',
+    'dag': 'nld_Latn',
+    'kpo': 'glg_Latn',
+    'kln': 'cat_Latn',
+    'luy': 'pol_Latn',
+    'nbl': 'ita_Latn',
+    'pcm': 'deu_Latn',
+}
+
+
+def nllb_69_language_token_ids(tokenizer):
+    '''Map each SALT code to its NLLB token id, checking that every code
+    exists in the tokenizer, that no two languages share one, and that all
+    languages are covered.'''
+    codes = SALT_LANGUAGE_CODES_NLLB_69
+    missing = set(SALT_LANGUAGE_NAMES) - set(codes)
+    assert not missing, f'No NLLB code for: {sorted(missing)}'
+    assert len(set(codes.values())) == len(codes), 'Duplicate NLLB codes'
+    ids = {lang: tokenizer.convert_tokens_to_ids(code)
+           for lang, code in codes.items()}
+    bad = [codes[l] for l, i in ids.items()
+           if i is None or i == tokenizer.unk_token_id]
+    assert not bad, f'Codes not in tokenizer vocabulary: {bad}'
+    return ids
