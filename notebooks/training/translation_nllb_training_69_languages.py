@@ -30,11 +30,29 @@ Language tokens come from constants.SALT_LANGUAGE_CODES_NLLB_69: NLLB's own
 code where it supports the language, otherwise a repurposed code. The final
 model directory includes nllb_language_codes.json with this mapping.
 
+Optional source language: with --src_lang_dropout (default 0.25), that
+fraction of training pairs get the unknown-source token "und"
+(constants.NLLB_69_UNKNOWN_SOURCE_CODE) instead of their source-language
+token, so at inference the source language can be given or left out (e.g. for
+code-switched text, or when it isn't known). The target language is always
+required. Dev chrF is then reported both ways (eval_chrf and eval_chrf_nosrc),
+and the salt-69 eval runs both ways (--source_modes): NAME_results.json with
+the source given, NAME_nosrc_results.json without, plus a per-language
+comparison table. translate(..., src=None, ...) translates without a source
+language.
+
 Long inputs: NLLB's tokenizer turns newlines into spaces, and the model was
 trained on <=512-token inputs. Multi-line SFT dialogues are trained both whole
 and split by line, so the model handles a whole transcript. To keep line
 breaks in production output, split on newlines, translate the lines as one
 batch, and re-join.
+
+Punctuation: all training text and model inputs go through normalize_text
+(NLLB's Moses punctuation normalization), because NLLB's vocabulary has no
+typographic quotes or dashes. Output therefore uses ASCII punctuation
+(' " -). Production inference should apply normalize_text to its inputs too.
+
+Requires torch, transformers, datasets, sacrebleu, sacremoses and torchao.
 
 Usage (from the repo root, in /venv/main):
   python notebooks/training/translation_nllb_training_69_languages.py all \
@@ -75,6 +93,7 @@ PARALLEL_DATA = ('Sunbird/sunflower-pretrain-data', 'parallel_text')
 SFT_DATA = ('Sunbird/sunflower-posttrain-data', 'sft_translations')
 EVAL_DATA = ('Sunbird/salt-69', 'sunflower', 'test')
 LANGS = constants.SALT_LANGUAGE_CODES_NLLB_69
+UNKNOWN_SOURCE = constants.NLLB_69_UNKNOWN_SOURCE  # lang_ids key, source only
 LANGUAGE_NAMES = constants.SALT_LANGUAGE_NAMES
 
 
@@ -110,9 +129,41 @@ def nonempty_lines(text):
     return [line.strip() for line in text.split('\n') if line.strip()]
 
 
+_punct_normalizer = None
+
+
+def normalize_text(text):
+    '''NLLB-style text normalization, applied to all training text and to
+    model inputs.
+
+    NLLB's vocabulary was built from text normalized with Moses
+    normalize-punctuation, so typographic punctuation is missing from it:
+    ’ ‘ “ ” – — « » become <unk>. Left as is, the model learns to output
+    <unk>, and decoding silently deletes it ("difference—it's" ->
+    "differenceit's"). This maps them to the ASCII forms NLLB knows
+    (’ -> ', “ ” « » -> ", — -> " - ", – -> -, … -> ...) and removes control
+    characters. Moses' quote/comma reordering and number rules are turned off
+    because they're language-specific.
+
+    Also removes two combining marks NLLB can't represent: U+0307 (stray dot,
+    mostly Lugungu "i̇") and U+0326 (Kabyle text artifacts).'''
+    global _punct_normalizer
+    if _punct_normalizer is None:
+        from sacremoses import MosesPunctNormalizer
+        _punct_normalizer = MosesPunctNormalizer(
+            pre_replace_unicode_punct=True, post_remove_control_chars=True,
+            norm_quote_commas=False, norm_numbers=False)
+    # Whitespace first: remove_control_chars would delete \n and \t outright.
+    text = re.sub(r'\s+', ' ', text)
+    text = text.replace('̇', '').replace('̦', '')
+    return _punct_normalizer.normalize(text)
+
+
 def salt69_texts():
+    '''All salt-69 texts, normalized as training text is, for the leakage
+    filter.'''
     ds = datasets.load_dataset(EVAL_DATA[0], EVAL_DATA[1], split=EVAL_DATA[2])
-    return {t.strip() for col in ds.column_names for t in ds[col] if t}
+    return {normalize_text(t) for col in ds.column_names for t in ds[col] if t}
 
 
 class Pairs:
@@ -226,14 +277,15 @@ def add_sft_pairs(pairs, split, upsample):
 
 
 def filter_pairs(pairs, eval_texts, max_ratio=3.0):
-    '''Drops empty, identical, eval-leaked, duplicate (parallel only) and
-    length-mismatched (parallel only) pairs.'''
+    '''Normalizes text (normalize_text), then drops empty, identical,
+    eval-leaked, duplicate (parallel only) and length-mismatched (parallel
+    only) pairs.'''
     keep = Pairs()
     seen = set()
     dropped = collections.Counter()
     d = pairs.data
     for src, tgt, sl, tl, origin in zip(*(d[c] for c in Pairs.COLUMNS)):
-        src, tgt = src.strip(), tgt.strip()
+        src, tgt = normalize_text(src), normalize_text(tgt)
         if not src or not tgt or src == tgt:
             dropped['empty/identical'] += 1
             continue
@@ -355,18 +407,32 @@ class Seq2SeqCollator:
     DataCollatorForSeq2Seq only does the shift if the model has
     prepare_decoder_input_ids_from_labels, which M2M100 lacks in transformers
     5.x. The model would shift the labels itself, but token_level_loss means
-    the Trainer doesn't pass it the labels.'''
+    the Trainer doesn't pass it the labels.
 
-    def __init__(self, tokenizer, config):
+    src_lang_dropout: the fraction of pairs whose source-language token is
+    replaced by unknown_source_id, so the model learns to translate without
+    being told the source language. Use it for training batches only, so eval
+    loss is deterministic.'''
+
+    def __init__(self, tokenizer, config, src_lang_dropout=0.0,
+                 unknown_source_id=None):
         self.pad = transformers.DataCollatorForSeq2Seq(
             tokenizer, label_pad_token_id=-100)
         self.pad_token_id = config.pad_token_id
         self.decoder_start_token_id = config.decoder_start_token_id
+        self.src_lang_dropout = src_lang_dropout
+        self.unknown_source_id = unknown_source_id
+        if src_lang_dropout:
+            assert unknown_source_id is not None
 
     def __call__(self, features):
         from transformers.models.m2m_100.modeling_m2m_100 import (
             shift_tokens_right)
         batch = self.pad(features)
+        if self.src_lang_dropout:
+            # The source-language token is always at position 0.
+            drop = torch.rand(len(batch['input_ids'])) < self.src_lang_dropout
+            batch['input_ids'][drop, 0] = self.unknown_source_id
         batch['decoder_input_ids'] = shift_tokens_right(
             batch['labels'], self.pad_token_id, self.decoder_start_token_id)
         return batch
@@ -390,14 +456,17 @@ def token_level_loss(outputs, labels, num_items_in_batch=None):
     return loss / num_items_in_batch
 
 
-def dev_chrf(model, tokenizer, lang_ids, dev, batch_size, max_length):
+def dev_chrf(model, tokenizer, lang_ids, dev, batch_size, max_length,
+             unknown_source=False):
     '''Greedy-decodes the dev pairs and returns chrF (same sentence-level
     metric as the salt-69 eval) averaged per direction, then over all
     directions and over the to-English / from-English / non-English groups.
     The dev set has only ~5 pairs per direction, so read the averages, not
-    single directions.'''
+    single directions. unknown_source: translate without giving the source
+    language.'''
     preds = translate(model, tokenizer, lang_ids, dev['source'],
-                      dev['source.language'], dev['target.language'],
+                      None if unknown_source else dev['source.language'],
+                      dev['target.language'],
                       batch_size=batch_size, num_beams=1,
                       max_new_tokens=max_length, max_length=max_length,
                       length_cap=3.0)
@@ -500,25 +569,40 @@ class ChrfTrainer(transformers.Trainer):
     '''Trainer whose evaluation also reports greedy-decoded dev-set chrF
     (eval_chrf, ...). Added inside evaluation_loop so the metrics are there
     when the Trainer logs them, checks early stopping and picks the best
-    checkpoint.'''
+    checkpoint.
+
+    With dev_chrf_unknown_source, it also reports eval_chrf_nosrc (and
+    _nosrc_to_eng etc.): the same dev pairs translated without the source
+    language. train_collator (e.g. with source-language dropout) is used for
+    training batches; data_collator for eval.'''
 
     def __init__(self, *args, dev_pairs, lang_ids, max_length,
-                 dev_chrf_batch_size, train_batch_sampler=None, **kwargs):
+                 dev_chrf_batch_size, train_batch_sampler=None,
+                 train_collator=None, dev_chrf_unknown_source=False,
+                 **kwargs):
         super().__init__(*args, **kwargs)
         self.dev_pairs = dev_pairs
         self.lang_ids = lang_ids
         self.max_length = max_length
         self.dev_chrf_batch_size = dev_chrf_batch_size
         self.train_batch_sampler = train_batch_sampler
+        self.train_collator = train_collator or self.data_collator
+        self.dev_chrf_unknown_source = dev_chrf_unknown_source
 
     def get_train_dataloader(self):
         if self.train_batch_sampler is None:
-            return super().get_train_dataloader()
+            # The DataLoader keeps the collator it's built with.
+            eval_collator, self.data_collator = (self.data_collator,
+                                                 self.train_collator)
+            try:
+                return super().get_train_dataloader()
+            finally:
+                self.data_collator = eval_collator
         dataset = self._remove_unused_columns(self.train_dataset,
                                               description='training')
         loader = torch.utils.data.DataLoader(
             dataset, batch_sampler=self.train_batch_sampler,
-            collate_fn=self.data_collator,
+            collate_fn=self.train_collator,
             num_workers=self.args.dataloader_num_workers,
             pin_memory=self.args.dataloader_pin_memory,
             persistent_workers=self.args.dataloader_persistent_workers)
@@ -532,12 +616,18 @@ class ChrfTrainer(transformers.Trainer):
         if prefix == 'eval':
             start = time.time()
             self.model.eval()
-            scores = dev_chrf(self.model, self.processing_class,
-                              self.lang_ids, self.dev_pairs,
-                              batch_size=self.dev_chrf_batch_size,
-                              max_length=self.max_length)
-            output.metrics.update(
-                {f'{prefix}_{k}': v for k, v in scores.items()})
+            for unknown_source in ([False, True] if self.dev_chrf_unknown_source
+                                   else [False]):
+                scores = dev_chrf(self.model, self.processing_class,
+                                  self.lang_ids, self.dev_pairs,
+                                  batch_size=self.dev_chrf_batch_size,
+                                  max_length=self.max_length,
+                                  unknown_source=unknown_source)
+                if unknown_source:
+                    scores = {k.replace('chrf', 'chrf_nosrc'): v
+                              for k, v in scores.items()}
+                output.metrics.update(
+                    {f'{prefix}_{k}': v for k, v in scores.items()})
             output.metrics[f'{prefix}_chrf_runtime'] = round(
                 time.time() - start, 1)
         return output
@@ -617,12 +707,21 @@ def train(args):
         hub_strategy='end',
         hub_private_repo=True,
     )
+    lang_ids = constants.nllb_69_language_token_ids(tokenizer)
+    if args.src_lang_dropout:
+        log.info('Source-language dropout: %.0f%% of training pairs get the '
+                 'unknown-source token (%s)', 100 * args.src_lang_dropout,
+                 constants.NLLB_69_UNKNOWN_SOURCE_CODE)
     trainer = ChrfTrainer(
         dev_pairs=dev_pairs,
-        lang_ids=constants.nllb_69_language_token_ids(tokenizer),
+        lang_ids=lang_ids,
         max_length=args.max_length,
         dev_chrf_batch_size=args.dev_chrf_batch_size,
         train_batch_sampler=batch_sampler,
+        train_collator=Seq2SeqCollator(
+            tokenizer, model.config, src_lang_dropout=args.src_lang_dropout,
+            unknown_source_id=lang_ids[UNKNOWN_SOURCE]),
+        dev_chrf_unknown_source=args.src_lang_dropout > 0,
         model=model,
         args=training_args,
         train_dataset=train_ds,
@@ -652,7 +751,10 @@ def train(args):
     trainer.save_model(str(final_dir))
     tokenizer.save_pretrained(str(final_dir))
     with open(final_dir / 'nllb_language_codes.json', 'w') as f:
-        json.dump(LANGS, f, indent=2)
+        codes = dict(LANGS)
+        if args.src_lang_dropout:
+            codes[UNKNOWN_SOURCE] = constants.NLLB_69_UNKNOWN_SOURCE_CODE
+        json.dump(codes, f, indent=2)
     log.info('Saved final (best) model to %s', final_dir)
     if args.hub_model_id:
         trainer.push_to_hub()
@@ -696,6 +798,9 @@ def translate(model, tokenizer, lang_ids, texts, src, tgt, batch_size,
               num_beams, max_new_tokens, max_length, length_cap=None):
     '''Translates texts. src is a language code or a list with one code per
     text. tgt likewise; with a list, one batch can mix target languages.
+    A source of None (whole argument or per text) means "not given": the
+    unknown-source token is used, which needs a model trained with
+    --src_lang_dropout.
 
     One target language: standard NLLB decoding with forced_bos_token_id.
     Several: the target token is given per row as a decoder prefix
@@ -706,8 +811,12 @@ def translate(model, tokenizer, lang_ids, texts, src, tgt, batch_size,
     length_cap: if set, max new tokens per batch is at most
     length_cap * (longest source in batch) + 10, which stops degenerate
     (non-terminating) outputs early.'''
+    texts = [normalize_text(t) for t in texts]  # as in training
     n = len(texts)
-    src_langs = [src] * n if isinstance(src, str) else src
+    src_langs = [src] * n if src is None or isinstance(src, str) else src
+    src_langs = [s or UNKNOWN_SOURCE for s in src_langs]
+    assert UNKNOWN_SOURCE not in ([tgt] if isinstance(tgt, str) else tgt), (
+        'The unknown-source token is not a target language')
     start_id = model.config.decoder_start_token_id
     order = sorted(range(n), key=lambda i: -len(texts[i]))
     outputs = [None] * n
@@ -755,6 +864,36 @@ def evaluate(args, model_path=None):
         c[:-5] for c in ds.column_names
         if c.endswith('_text') and c != 'eng_text')
 
+    results = {}
+    for mode in args.source_modes:
+        results[mode] = evaluate_salt69(
+            args, model, tokenizer, lang_ids, ds, languages, model_path,
+            name=name if mode == 'given' else f'{name}_nosrc',
+            unknown_source=mode == 'unknown')
+    if len(results) == 2:
+        given = results['given']['per_language']
+        unknown = results['unknown']['per_language']
+        table = pd.DataFrame([
+            {'lang': lang, 'name': given[lang]['name'],
+             'eng->xx': given[lang]['eng_to_xx']['chrf'],
+             'eng->xx nosrc': unknown[lang]['eng_to_xx']['chrf'],
+             'xx->eng': given[lang]['xx_to_eng']['chrf'],
+             'xx->eng nosrc': unknown[lang]['xx_to_eng']['chrf'],
+             'avg change': round(unknown[lang]['avg_chrf']
+                                 - given[lang]['avg_chrf'], 4)}
+            for lang in given]).sort_values('avg change')
+        log.info('chrF with the source language given vs not given (nosrc):'
+                 '\n%s', table.to_string(index=False))
+    return results
+
+
+def evaluate_salt69(args, model, tokenizer, lang_ids, ds, languages,
+                    model_path, name, unknown_source):
+    '''One salt-69 pass, translating with the source language given, or with
+    the unknown-source token (unknown_source). Results are saved under name,
+    and MLflow metrics get the prefix nosrc_ when the source isn't given.'''
+    log.info('salt-69 with the source language %s',
+             'not given' if unknown_source else 'given')
     results = {'per_language': {}}
     predictions, direction_metrics = [], []
     for lang in languages:
@@ -767,7 +906,8 @@ def evaluate(args, model_path=None):
         for direction, src, tgt, sources, refs in (
                 ('eng_to_xx', 'eng', lang, eng_texts, lang_texts),
                 ('xx_to_eng', lang, 'eng', lang_texts, eng_texts)):
-            preds = translate(model, tokenizer, lang_ids, sources, src, tgt,
+            preds = translate(model, tokenizer, lang_ids, sources,
+                              None if unknown_source else src, tgt,
                               batch_size=args.eval_batch_size,
                               num_beams=args.num_beams,
                               max_new_tokens=args.max_new_tokens,
@@ -831,6 +971,8 @@ def evaluate(args, model_path=None):
             for metric in ('chrf', 'bleu'):
                 metrics[f'{metric}_eng_to_{lang}'] = r['eng_to_xx'][metric]
                 metrics[f'{metric}_{lang}_to_eng'] = r['xx_to_eng'][metric]
+        if unknown_source:
+            metrics = {f'nosrc_{k}': v for k, v in metrics.items()}
         mlflow.log_metrics(metrics)
         mlflow.log_artifact(str(results_path))
     return results
@@ -885,10 +1027,10 @@ def parse_args():
                         '~32 with fixed batches of 8')
     g.add_argument('--learning_rate', type=float, default=1e-4)
     g.add_argument('--weight_decay', type=float, default=0.0)
-    g.add_argument('--warmup_steps', type=int, default=500)
-    g.add_argument('--num_train_epochs', type=float, default=1)
+    g.add_argument('--warmup_steps', type=int, default=100)
+    g.add_argument('--num_train_epochs', type=float, default=2)
     g.add_argument('--max_steps', type=int, default=-1)
-    g.add_argument('--eval_steps', type=int, default=200,
+    g.add_argument('--eval_steps', type=int, default=500,
                    help='Evaluate (dev loss + chrF) and save a checkpoint '
                         'every N optimizer steps')
     g.add_argument('--eval_on_start', action=argparse.BooleanOptionalAction,
@@ -900,9 +1042,16 @@ def parse_args():
     g.add_argument('--dev_chrf_batch_size', type=int, default=64,
                    help='Generation batch size for dev-set chrF at each '
                         'evaluation (64: ~1 min, ~23GB peak during training)')
-    g.add_argument('--best_metric', choices=['chrf', 'loss'], default='chrf',
+    g.add_argument('--best_metric', choices=['chrf', 'chrf_nosrc', 'loss'],
+                   default='chrf',
                    help='Dev-set metric for best checkpoint and early '
-                        'stopping')
+                        'stopping (chrf_nosrc: source language not given; '
+                        'needs --src_lang_dropout)')
+    g.add_argument('--src_lang_dropout', type=float, default=0.25,
+                   help='Fraction of training pairs whose source-language '
+                        'token is replaced by the unknown-source token, so '
+                        'the source language is optional at inference. 0 = '
+                        'always give it (as in earlier runs)')
     g.add_argument('--hub_model_id', help='Push the final model here (private)')
 
     g = p.add_argument_group('eval')
@@ -916,7 +1065,21 @@ def parse_args():
     g.add_argument('--num_beams', type=int, default=4)
     g.add_argument('--max_new_tokens', type=int, default=256)
     g.add_argument('--run_name', help='Name for result files')
-    return p.parse_args()
+    g.add_argument('--source_modes', nargs='+', choices=['given', 'unknown'],
+                   help='Evaluate with the source language given, not given '
+                        '(unknown-source token; results saved as '
+                        'NAME_nosrc_*), or both. Default: both if '
+                        '--src_lang_dropout > 0, else given')
+    args = p.parse_args()
+    if args.best_metric == 'chrf_nosrc' and not args.src_lang_dropout:
+        p.error('--best_metric chrf_nosrc needs --src_lang_dropout > 0')
+    if args.source_modes is None:
+        args.source_modes = (['given', 'unknown'] if args.src_lang_dropout
+                             else ['given'])
+    # Deduplicate, keeping 'given' first.
+    args.source_modes = [m for m in ('given', 'unknown')
+                         if m in args.source_modes]
+    return args
 
 
 def main():

@@ -267,13 +267,23 @@ SALT_LANGUAGE_CODES_NLLB_69 = {
 }
 
 
+# Source-language token meaning "source language not given" (ISO 639 'und',
+# undetermined). Models trained with source-language dropout accept it as the
+# source token, so specifying the source language is optional. Use it only on
+# the source side, never as a target. Samoan is a language these models will
+# never translate.
+NLLB_69_UNKNOWN_SOURCE = 'und'
+NLLB_69_UNKNOWN_SOURCE_CODE = 'smo_Latn'
+
+
 def nllb_69_language_token_ids(tokenizer):
-    '''Map each SALT code to its NLLB token id, checking that every code
-    exists in the tokenizer, that no two languages share one, and that all
-    languages are covered.'''
+    '''Map each SALT code, plus NLLB_69_UNKNOWN_SOURCE, to its NLLB token id,
+    checking that every code exists in the tokenizer, that no two languages
+    share one, and that all languages are covered.'''
     codes = SALT_LANGUAGE_CODES_NLLB_69
     missing = set(SALT_LANGUAGE_NAMES) - set(codes)
     assert not missing, f'No NLLB code for: {sorted(missing)}'
+    codes = {**codes, NLLB_69_UNKNOWN_SOURCE: NLLB_69_UNKNOWN_SOURCE_CODE}
     assert len(set(codes.values())) == len(codes), 'Duplicate NLLB codes'
     ids = {lang: tokenizer.convert_tokens_to_ids(code)
            for lang, code in codes.items()}
