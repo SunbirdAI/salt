@@ -12,6 +12,20 @@ consolidated Sunbird datasets:
 - Sunbird/sunflower-posttrain-data, config sft_translations: refined chat-format
   pairs. The source text is extracted from the prompt, and direction is
   languages[0] -> languages[1] only. The test split is salt-69, so it's unused.
+  More heavily quality-filtered than parallel_text, and in modern usage: for
+  some languages parallel_text has only archaic forms (old bible translations),
+  which are useful early in training but shouldn't shape the final output.
+
+Training runs in one phase by default. With --sft_epoch it runs two: phase 1
+on all data, then phase 2 on the sft pairs alone at a lower learning rate, so
+the clean, modern data is what the last optimizer steps see. Phase 2 reuses
+the sft rows of the same prepared dataset, so `prepare` is unchanged. Phase 1
+keeps its best checkpoint by dev metric; phase 2 takes its last one, because
+its training data is the same distribution as the dev set, so the dev metric
+rises throughout and "best" would only mean "last evaluated". Note that the
+sft data doesn't cover every language (nothing for kln, ber, ndp, dga; no
+xx->eng for led, ikx, din; almost no non-English directions), so compare the
+per-language salt-69 table against phase1/ to see what phase 2 cost.
 
 Evaluation computes chrF/BLEU on Sunbird/salt-69 for every eng->xx and xx->eng
 direction. The metric matches sunflower/eval_translation.py (whisper
@@ -57,6 +71,14 @@ Requires torch, transformers, datasets, sacrebleu, sacremoses and torchao.
 Usage (from the repo root, in /venv/main):
   python notebooks/training/translation_nllb_training_69_languages.py all \
       --output_dir /workspace/nllb-3.3b-salt69
+  # one epoch on all data, then one on the sft data alone:
+  python notebooks/training/translation_nllb_training_69_languages.py all \
+      --output_dir /workspace/nllb-3.3b-salt69-sft \
+      --sft_upsample 1 --num_train_epochs 1 --sft_epoch
+  # just the sft phase, on top of a model already trained on all data:
+  python notebooks/training/translation_nllb_training_69_languages.py all \
+      --output_dir /workspace/nllb-1.3b-sft --skip_phase1 \
+      --base_model Sunbird-experimental/nllb1.3b-67languages --sft_upsample 1
   # or step by step: prepare, train, eval (each takes --output_dir)
   python notebooks/training/translation_nllb_training_69_languages.py eval \
       --output_dir /workspace/eval-base --model facebook/nllb-200-3.3B
@@ -633,51 +655,50 @@ class ChrfTrainer(transformers.Trainer):
         return output
 
 
-def train(args):
+def make_batch_sampler(lengths, args, name):
+    '''TokenBudgetBatchSampler over a pandas frame of token counts, or None
+    when token-budget batching is off.'''
+    if not args.max_tokens_per_batch:
+        return None
+    sampler = TokenBudgetBatchSampler(
+        lengths['n_source_tokens'].values,
+        lengths['n_target_tokens'].values,
+        max_tokens=args.max_tokens_per_batch,
+        max_batch_size=args.max_sequences_per_batch, seed=args.seed)
+    log.info('%s: token-budget batching, %d batches of <= %d padded tokens '
+             '(%.1f pairs per batch on average)', name, len(sampler),
+             args.max_tokens_per_batch, len(lengths) / len(sampler))
+    return sampler
+
+
+def make_trainer(args, model, tokenizer, lang_ids, train_ds, batch_sampler,
+                 val_ds, dev_pairs, *, checkpoints_dir, learning_rate,
+                 num_train_epochs, warmup_steps, eval_steps, select_best,
+                 run_name, is_final_phase):
+    '''Builds a ChrfTrainer for one training phase.
+
+    select_best: keep the best checkpoint by dev metric and stop early.
+    Phase 2 sets it False, because its training data is the same
+    distribution as the dev set, so the dev metric rises monotonically and
+    "best" would just mean "last evaluated". The last checkpoint is taken
+    instead.'''
     import torchao.optim
-
-    out = Path(args.output_dir)
-    pairs = datasets.load_from_disk(str(out / 'pairs'))
-    model_columns = ['input_ids', 'attention_mask', 'labels']
-    train_ds = pairs['train'].select_columns(model_columns)
-    batch_sampler = None
-    if args.max_tokens_per_batch:
-        lengths = pairs['train'].select_columns(
-            ['n_source_tokens', 'n_target_tokens']).to_pandas()
-        batch_sampler = TokenBudgetBatchSampler(
-            lengths['n_source_tokens'].values,
-            lengths['n_target_tokens'].values,
-            max_tokens=args.max_tokens_per_batch,
-            max_batch_size=args.max_sequences_per_batch, seed=args.seed)
-        log.info('Token-budget batching: %d batches of <= %d padded tokens '
-                 '(%.1f pairs per batch on average)', len(batch_sampler),
-                 args.max_tokens_per_batch,
-                 len(train_ds) / len(batch_sampler))
-    val_ds = pairs['validation'].select_columns(model_columns)
-    dev_pairs = pairs['validation'].select_columns(
-        ['source', 'target', 'source.language', 'target.language']).to_dict()
-    log.info('Training on %d pairs, validating on %d', len(train_ds),
-             len(val_ds))
-
-    tokenizer = transformers.AutoTokenizer.from_pretrained(args.base_model)
-    model = transformers.AutoModelForSeq2SeqLM.from_pretrained(
-        args.base_model, dtype=torch.bfloat16)
 
     # Pure-bf16 weights: stochastic rounding stops small updates being
     # rounded away; 8-bit optimizer states keep memory within one 32GB GPU.
     optimizer = torchao.optim.AdamW8bit(
-        model.parameters(), lr=args.learning_rate,
+        model.parameters(), lr=learning_rate,
         weight_decay=args.weight_decay, bf16_stochastic_round=True)
 
     training_args = transformers.TrainingArguments(
-        output_dir=str(out / 'checkpoints'),
+        output_dir=str(checkpoints_dir),
         per_device_train_batch_size=args.per_device_train_batch_size,
         per_device_eval_batch_size=args.per_device_eval_batch_size,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
-        learning_rate=args.learning_rate,
+        learning_rate=learning_rate,
         lr_scheduler_type='linear',
-        warmup_steps=args.warmup_steps,
-        num_train_epochs=args.num_train_epochs,
+        warmup_steps=warmup_steps,
+        num_train_epochs=num_train_epochs,
         max_steps=args.max_steps,
         # The weights are already bf16. bf16=True would add autocast, and
         # accelerate then copies the (batch x length x 256k vocab) logits
@@ -688,31 +709,31 @@ def train(args):
         train_sampling_strategy='group_by_length',
         include_num_input_tokens_seen='non_padding',
         eval_strategy='steps',
-        eval_steps=args.eval_steps,
+        eval_steps=eval_steps,
         eval_on_start=args.eval_on_start,
         save_strategy='steps',
-        save_steps=args.eval_steps,
+        save_steps=eval_steps,
         save_total_limit=args.save_total_limit,
-        load_best_model_at_end=True,
+        load_best_model_at_end=select_best,
         # Dev-set chrF (higher is better) or loss (lower is better); the
         # Trainer infers the direction from the name.
         metric_for_best_model=f'eval_{args.best_metric}',
         logging_steps=args.logging_steps,
         dataloader_num_workers=4,
         report_to=['mlflow'] if mlflow_enabled() else 'none',
-        run_name=out.name,
+        run_name=run_name,
         seed=args.seed,
-        push_to_hub=bool(args.hub_model_id),
+        # Only the last phase pushes, so the hub gets one upload.
+        push_to_hub=bool(args.hub_model_id) and is_final_phase,
         hub_model_id=args.hub_model_id,
         hub_strategy='end',
         hub_private_repo=True,
     )
-    lang_ids = constants.nllb_69_language_token_ids(tokenizer)
-    if args.src_lang_dropout:
-        log.info('Source-language dropout: %.0f%% of training pairs get the '
-                 'unknown-source token (%s)', 100 * args.src_lang_dropout,
-                 constants.NLLB_69_UNKNOWN_SOURCE_CODE)
-    trainer = ChrfTrainer(
+    callbacks = [ThroughputCallback()]
+    if select_best:
+        callbacks.insert(0, transformers.EarlyStoppingCallback(
+            early_stopping_patience=args.early_stopping_patience))
+    return ChrfTrainer(
         dev_pairs=dev_pairs,
         lang_ids=lang_ids,
         max_length=args.max_length,
@@ -730,10 +751,69 @@ def train(args):
         processing_class=tokenizer,
         compute_loss_func=token_level_loss,
         optimizers=(optimizer, None),
-        callbacks=[transformers.EarlyStoppingCallback(
-            early_stopping_patience=args.early_stopping_patience),
-            ThroughputCallback()],
+        callbacks=callbacks,
     )
+
+
+def free_trainer(trainer):
+    '''Drops a finished trainer and its 8-bit optimizer states (~2 bytes per
+    parameter, so several GB for a 3.3B model) before the next phase builds
+    its own. The model itself is kept: the next phase continues from it.'''
+    import gc
+    trainer.model = None
+    trainer.optimizer = None
+    trainer.lr_scheduler = None
+    del trainer
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
+def train(args):
+    out = Path(args.output_dir)
+    pairs = datasets.load_from_disk(str(out / 'pairs'))
+    model_columns = ['input_ids', 'attention_mask', 'labels']
+    train_ds = pairs['train'].select_columns(model_columns)
+    lengths = pairs['train'].select_columns(
+        ['n_source_tokens', 'n_target_tokens']).to_pandas()
+    batch_sampler = None
+    if not args.skip_phase1:
+        batch_sampler = make_batch_sampler(lengths, args, 'phase 1 (all data)')
+    val_ds = pairs['validation'].select_columns(model_columns)
+    dev_pairs = pairs['validation'].select_columns(
+        ['source', 'target', 'source.language', 'target.language']).to_dict()
+    log.info('Prepared %d train pairs, validating on %d', len(train_ds),
+             len(val_ds))
+
+    # Phase 2 trains on the sft rows of the same prepared dataset ('sft' and
+    # 'sft_line'), so no second `prepare` is needed.
+    sft_ds = sft_sampler = None
+    if args.sft_epoch:
+        origins = np.asarray(pairs['train']['origin'])
+        sft_idx = np.flatnonzero(np.char.startswith(origins, 'sft'))
+        if not len(sft_idx):
+            raise SystemExit(
+                '--sft_epoch: no sft rows in the prepared data. Re-run '
+                '`prepare` with --sft_upsample >= 1.')
+        sft_ds = train_ds.select(sft_idx)
+        sft_sampler = make_batch_sampler(
+            lengths.iloc[sft_idx].reset_index(drop=True), args,
+            'phase 2 (sft only)')
+        log.info('Phase 2 will train on %d sft pairs%s, origins: %s',
+                 len(sft_idx),
+                 '' if args.skip_phase1 else
+                 ' (%.1f%% of phase 1)' % (100 * len(sft_idx) / len(train_ds)),
+                 dict(collections.Counter(origins[sft_idx].tolist())))
+
+    tokenizer = transformers.AutoTokenizer.from_pretrained(args.base_model)
+    model = transformers.AutoModelForSeq2SeqLM.from_pretrained(
+        args.base_model, dtype=torch.bfloat16)
+    lang_ids = constants.nllb_69_language_token_ids(tokenizer)
+    if args.src_lang_dropout:
+        log.info('Source-language dropout: %.0f%% of training pairs get the '
+                 'unknown-source token (%s)', 100 * args.src_lang_dropout,
+                 constants.NLLB_69_UNKNOWN_SOURCE_CODE)
+
     if mlflow_enabled():
         # Start the run here (the Trainer's callback reuses an active run and
         # leaves it open) so `all` logs training and eval to one run.
@@ -742,10 +822,58 @@ def train(args):
             mlflow.start_run(run_name=out.name)
         mlflow.log_artifact(str(out / 'pair_counts.csv'))
 
-    trainer.train()
-    if torch.cuda.is_available():
-        log.info('Peak GPU memory: %.1f GB',
-                 torch.cuda.max_memory_allocated() / 1e9)
+    trainer = None
+    if not args.skip_phase1:
+        log.info('Phase 1: all data, %g epoch(s) at lr %g',
+                 args.num_train_epochs, args.learning_rate)
+        trainer = make_trainer(
+            args, model, tokenizer, lang_ids, train_ds, batch_sampler, val_ds,
+            dev_pairs, checkpoints_dir=out / 'checkpoints',
+            learning_rate=args.learning_rate,
+            num_train_epochs=args.num_train_epochs,
+            warmup_steps=args.warmup_steps, eval_steps=args.eval_steps,
+            select_best=True, run_name=out.name,
+            is_final_phase=not args.sft_epoch)
+        trainer.train()
+        if torch.cuda.is_available():
+            log.info('Phase 1 peak GPU memory: %.1f GB',
+                     torch.cuda.max_memory_allocated() / 1e9)
+        if args.sft_epoch:
+            # Phase 1 reloaded its best checkpoint into `model`, so phase 2
+            # continues from that, with a fresh optimizer and a lower
+            # learning rate warmed up again from zero.
+            trainer.save_model(str(out / 'phase1'))
+            log.info('Saved phase-1 (best) model to %s', out / 'phase1')
+            free_trainer(trainer)
+            trainer = None
+
+    if args.sft_epoch:
+        nested_run = None
+        if mlflow_enabled() and not args.skip_phase1:
+            # A nested run, so phase 2's step numbers don't overwrite
+            # phase 1's in the parent run.
+            import mlflow
+            nested_run = mlflow.start_run(run_name=f'{out.name}-sft',
+                                          nested=True)
+        log.info('Phase 2: sft data only, %g epoch(s) at lr %g, starting '
+                 'from %s', args.sft_epochs, args.sft_epoch_learning_rate,
+                 args.base_model if args.skip_phase1 else 'phase 1')
+        trainer = make_trainer(
+            args, model, tokenizer, lang_ids, sft_ds, sft_sampler, val_ds,
+            dev_pairs, checkpoints_dir=out / 'checkpoints_sft',
+            learning_rate=args.sft_epoch_learning_rate,
+            num_train_epochs=args.sft_epochs,
+            warmup_steps=args.sft_epoch_warmup_steps,
+            eval_steps=args.sft_epoch_eval_steps,
+            select_best=False, run_name=f'{out.name}-sft',
+            is_final_phase=True)
+        trainer.train()
+        if torch.cuda.is_available():
+            log.info('Phase 2 peak GPU memory: %.1f GB',
+                     torch.cuda.max_memory_allocated() / 1e9)
+        if nested_run is not None:
+            import mlflow
+            mlflow.end_run()
 
     final_dir = out / 'final'
     trainer.save_model(str(final_dir))
@@ -755,7 +883,7 @@ def train(args):
         if args.src_lang_dropout:
             codes[UNKNOWN_SOURCE] = constants.NLLB_69_UNKNOWN_SOURCE_CODE
         json.dump(codes, f, indent=2)
-    log.info('Saved final (best) model to %s', final_dir)
+    log.info('Saved final model to %s', final_dir)
     if args.hub_model_id:
         trainer.push_to_hub()
     return str(final_dir)
@@ -1028,8 +1156,37 @@ def parse_args():
     g.add_argument('--learning_rate', type=float, default=1e-4)
     g.add_argument('--weight_decay', type=float, default=0.0)
     g.add_argument('--warmup_steps', type=int, default=100)
-    g.add_argument('--num_train_epochs', type=float, default=2)
+    g.add_argument('--num_train_epochs', type=float, default=2,
+                   help='Epochs for phase 1 (all data). Use 1 with '
+                        '--sft_epoch')
     g.add_argument('--max_steps', type=int, default=-1)
+
+    g = p.add_argument_group(
+        'train: second epoch on sft data only',
+        'After phase 1 on all data, optionally train a second phase on just '
+        'the sunflower-posttrain sft pairs, which are quality-filtered and '
+        'in modern usage, so they rather than the noisier parallel_text '
+        'shape the final output. Phase 2 reuses the sft rows of the same '
+        'prepared dataset.')
+    g.add_argument('--sft_epoch', action=argparse.BooleanOptionalAction,
+                   default=False,
+                   help='Run the second, sft-only phase')
+    g.add_argument('--skip_phase1', action=argparse.BooleanOptionalAction,
+                   default=False,
+                   help='Skip phase 1 and run only the sft phase, starting '
+                        'from --base_model. Use to add an sft phase to a '
+                        'model already trained on all data. Implies '
+                        '--sft_epoch')
+    g.add_argument('--sft_epochs', type=float, default=1.0,
+                   help='Epochs for phase 2')
+    g.add_argument('--sft_epoch_learning_rate', type=float, default=2e-5,
+                   help='Phase-2 learning rate. Lower than phase 1, so the '
+                        'short sft-only phase shifts the output register '
+                        'without undoing phase 1')
+    g.add_argument('--sft_epoch_warmup_steps', type=int, default=25)
+    g.add_argument('--sft_epoch_eval_steps', type=int, default=100,
+                   help='Phase 2 is only a few hundred steps, so it needs a '
+                        'smaller value than --eval_steps')
     g.add_argument('--eval_steps', type=int, default=500,
                    help='Evaluate (dev loss + chrF) and save a checkpoint '
                         'every N optimizer steps')
@@ -1073,6 +1230,9 @@ def parse_args():
     args = p.parse_args()
     if args.best_metric == 'chrf_nosrc' and not args.src_lang_dropout:
         p.error('--best_metric chrf_nosrc needs --src_lang_dropout > 0')
+    if args.skip_phase1:
+        # Only phase 2 runs, so there is nothing to select between.
+        args.sft_epoch = True
     if args.source_modes is None:
         args.source_modes = (['given', 'unknown'] if args.src_lang_dropout
                              else ['given'])
