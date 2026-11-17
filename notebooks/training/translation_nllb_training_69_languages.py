@@ -87,10 +87,11 @@ Usage (from the repo root, in /venv/main):
       --output_dir /workspace/eval-base --model facebook/nllb-200-3.3B
 
 MLflow logging is required by default: train/eval/all stop before doing any
-work unless MLFLOW_TRACKING_URI is set and the server accepts the
-credentials (MLFLOW_TRACKING_USERNAME / MLFLOW_TRACKING_PASSWORD). Set
-MLFLOW_EXPERIMENT_NAME to choose the experiment. Pass --no-mlflow to run
-without logging.
+work unless https://mlflow.sunbird.ai accepts the credentials in
+MLFLOW_TRACKING_USERNAME / MLFLOW_TRACKING_PASSWORD. Runs land in the
+"translation" experiment. The server and the experiment are both set in this
+script and ignore MLFLOW_TRACKING_URI / MLFLOW_EXPERIMENT_NAME. Pass
+--no-mlflow to run without logging.
 """
 
 import argparse
@@ -462,6 +463,17 @@ def prepare(args):
 # Training
 # ---------------------------------------------------------------------------
 
+# The tracking server, and the experiment runs from this script land in. Both
+# are fixed here rather than read from the environment, and both deliberately
+# override MLFLOW_TRACKING_URI / MLFLOW_EXPERIMENT_NAME if those are set: the
+# variables were easy to forget and easy to leave pointing at another
+# project, and a run that lands on the wrong server or in the wrong
+# experiment is only noticed later, by which time the comparison it was meant
+# to join has been split in two. The GRPO script passes its own experiment
+# name. Only the credentials still come from the environment.
+MLFLOW_TRACKING_URI = 'https://mlflow.sunbird.ai'
+MLFLOW_EXPERIMENT = 'translation'
+
 _mlflow_active = False  # set by check_mlflow()
 
 
@@ -469,48 +481,52 @@ def mlflow_enabled():
     return _mlflow_active
 
 
-def check_mlflow():
-    '''Stops before any work unless MLflow logging will work: the tracking
-    URI is set and the server answers with these credentials. Without this,
-    a missing MLFLOW_TRACKING_URI silently turned logging off.'''
+def check_mlflow(experiment_name=MLFLOW_EXPERIMENT):
+    '''Stops before any work unless MLflow logging will work: the server
+    answers with these credentials. Without this, a missing tracking URI
+    silently turned logging off.
+
+    Runs go to `experiment_name` on MLFLOW_TRACKING_URI, creating the
+    experiment if it does not exist. Both ignore the environment, including
+    an MLFLOW_EXPERIMENT_NAME someone already had exported.
+
+    Both are also written back into os.environ, which is not belt and braces:
+    transformers' MLflowCallback reads MLFLOW_TRACKING_URI and
+    MLFLOW_EXPERIMENT_NAME from there itself (integration_utils.py,
+    MLflowCallback.setup), so a stale MLFLOW_EXPERIMENT_NAME could still move
+    Trainer's own logging to another experiment on any path that reaches the
+    callback with no run already active.'''
     global _mlflow_active
-    uri = os.environ.get('MLFLOW_TRACKING_URI')
-    if not uri:
-        unset = [v for v in ('MLFLOW_TRACKING_URI', 'MLFLOW_TRACKING_USERNAME',
-                             'MLFLOW_TRACKING_PASSWORD',
-                             'MLFLOW_EXPERIMENT_NAME')
-                 if not os.environ.get(v)]
-        raise SystemExit(
-            'MLflow logging is on (the default) but MLFLOW_TRACKING_URI is '
-            f'not set. Not set: {", ".join(unset)}. Export them in the shell '
-            'that starts the run, or pass --no-mlflow to run without logging.')
     if os.environ.get('DISABLE_MLFLOW_INTEGRATION', '').upper() in (
             '1', 'TRUE', 'YES'):
         raise SystemExit('DISABLE_MLFLOW_INTEGRATION is set, so the Trainer '
                          'would not log to MLflow. Unset it, or pass '
                          '--no-mlflow.')
     import mlflow
-    # The URI may embed credentials (https://user:pass@host); never print them.
+    os.environ['MLFLOW_TRACKING_URI'] = MLFLOW_TRACKING_URI
+    os.environ['MLFLOW_EXPERIMENT_NAME'] = experiment_name
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+
+    # An error from the server may quote a URI with credentials in it
+    # (https://user:pass@host); never print them.
     def hide_credentials(text):
         return re.sub(r'//[^/@\s]+@', '//', text)
-    shown = hide_credentials(uri)
-    name = os.environ.get('MLFLOW_EXPERIMENT_NAME')
     try:
         # Creates the experiment if it doesn't exist; either way this makes a
-        # request, so a wrong URI or bad credentials fail here.
-        experiment = (mlflow.set_experiment(name) if name
-                      else mlflow.get_experiment('0'))
+        # request, so an unreachable server or bad credentials fail here.
+        experiment = mlflow.set_experiment(experiment_name)
     except Exception as e:
+        unset = [v for v in ('MLFLOW_TRACKING_USERNAME',
+                             'MLFLOW_TRACKING_PASSWORD')
+                 if not os.environ.get(v)]
         raise SystemExit(
-            f'Could not reach MLflow at {shown}: {type(e).__name__}: '
-            f'{hide_credentials(str(e))}\n'
-            'Check MLFLOW_TRACKING_URI, MLFLOW_TRACKING_USERNAME and '
-            'MLFLOW_TRACKING_PASSWORD, or pass --no-mlflow.') from e
-    if not name:
-        log.warning('MLFLOW_EXPERIMENT_NAME is not set; logging to the '
-                    'default experiment')
-    log.info('Logging to MLflow at %s, experiment "%s" (id %s)', shown,
-             experiment.name, experiment.experiment_id)
+            f'Could not reach MLflow at {MLFLOW_TRACKING_URI}: '
+            f'{type(e).__name__}: {hide_credentials(str(e))}\n'
+            + (f'Not set: {", ".join(unset)}. ' if unset else '')
+            + 'Check MLFLOW_TRACKING_USERNAME and MLFLOW_TRACKING_PASSWORD, '
+              'or pass --no-mlflow to run without logging.') from e
+    log.info('Logging to MLflow at %s, experiment "%s" (id %s)',
+             MLFLOW_TRACKING_URI, experiment.name, experiment.experiment_id)
     _mlflow_active = True
 
 
