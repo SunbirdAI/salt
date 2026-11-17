@@ -186,8 +186,13 @@ SALT_LANGUAGE_TOKENS_NLLB_TRANSLATION = {
 # that these models never translate, so the pretrained code token is
 # "repurposed". Resolve token ids with tokenizer.convert_tokens_to_ids(code),
 # and check with nllb_69_language_token_ids().
-SALT_LANGUAGE_CODES_NLLB_69 = {
-    # Native NLLB codes
+#
+# SALT_LANGUAGE_CODES_NLLB_69 combines two parts:
+# - SALT_LANGUAGE_CODES_NLLB_69_NATIVE: languages NLLB-200 was pretrained on,
+#   with NLLB's own code.
+# - SALT_LANGUAGE_CODES_NLLB_69_REPURPOSED: languages new to NLLB, using a
+#   repurposed code. The model learns these only from fine-tuning data.
+SALT_LANGUAGE_CODES_NLLB_69_NATIVE = {
     'eng': 'eng_Latn',
     'ibo': 'ibo_Latn',
     'lug': 'lug_Latn',
@@ -221,7 +226,10 @@ SALT_LANGUAGE_CODES_NLLB_69 = {
     'xho': 'xho_Latn',
     'yor': 'yor_Latn',
     'zul': 'zul_Latn',
-    # Repurposed codes (the NLLB language named in each code is not used)
+}
+
+# The NLLB language named in each code is not used.
+SALT_LANGUAGE_CODES_NLLB_69_REPURPOSED = {
     'ach': 'fur_Latn',
     'lgg': 'lij_Latn',
     'nyn': 'lim_Latn',
@@ -265,6 +273,9 @@ SALT_LANGUAGE_CODES_NLLB_69 = {
     'nbl': 'ita_Latn',
     'pcm': 'deu_Latn',
 }
+
+SALT_LANGUAGE_CODES_NLLB_69 = {**SALT_LANGUAGE_CODES_NLLB_69_NATIVE,
+                               **SALT_LANGUAGE_CODES_NLLB_69_REPURPOSED}
 
 
 # Source-language token meaning "source language not given" (ISO 639 'und',

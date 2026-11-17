@@ -5,10 +5,13 @@ consolidated Sunbird datasets:
 
 - Sunbird/sunflower-pretrain-data, config parallel_text: multi-way parallel
   rows as a JSON dict {lang: text}. Large but less filtered. Sampled with a cap
-  per eng->xx / xx->eng direction plus some non-English pairs. Keys ending in
-  "_target" (e.g. kin_target) are translations of English where gender
-  information was lost ("he went"/"she went" -> one form), so they're only used
-  as eng->xx targets.
+  per eng->xx / xx->eng direction: a low cap (--max_per_direction_native) for
+  languages NLLB-200 was pretrained on, which have the most data but need the
+  least, and a high one (--max_per_direction_new) for languages new to NLLB.
+  Plus non-English pairs, sampled per language (--non_eng_fraction). Keys
+  ending in "_target" (e.g. kin_target) are translations of English where
+  gender information was lost ("he went"/"she went" -> one form), so they're
+  only used as eng->xx targets.
 - Sunbird/sunflower-posttrain-data, config sft_translations: refined chat-format
   pairs. The source text is extracted from the prompt, and direction is
   languages[0] -> languages[1] only. The test split is salt-69, so it's unused.
@@ -83,7 +86,11 @@ Usage (from the repo root, in /venv/main):
   python notebooks/training/translation_nllb_training_69_languages.py eval \
       --output_dir /workspace/eval-base --model facebook/nllb-200-3.3B
 
-MLflow logging is enabled when MLFLOW_TRACKING_URI is set.
+MLflow logging is required by default: train/eval/all stop before doing any
+work unless MLFLOW_TRACKING_URI is set and the server accepts the
+credentials (MLFLOW_TRACKING_USERNAME / MLFLOW_TRACKING_PASSWORD). Set
+MLFLOW_EXPERIMENT_NAME to choose the experiment. Pass --no-mlflow to run
+without logging.
 """
 
 import argparse
@@ -115,6 +122,7 @@ PARALLEL_DATA = ('Sunbird/sunflower-pretrain-data', 'parallel_text')
 SFT_DATA = ('Sunbird/sunflower-posttrain-data', 'sft_translations')
 EVAL_DATA = ('Sunbird/salt-69', 'sunflower', 'test')
 LANGS = constants.SALT_LANGUAGE_CODES_NLLB_69
+NATIVE_LANGS = set(constants.SALT_LANGUAGE_CODES_NLLB_69_NATIVE)
 UNKNOWN_SOURCE = constants.NLLB_69_UNKNOWN_SOURCE  # lang_ids key, source only
 LANGUAGE_NAMES = constants.SALT_LANGUAGE_NAMES
 
@@ -205,6 +213,15 @@ class Pairs:
         return len(self.data['source'])
 
 
+def direction_cap(lang, args):
+    '''Max parallel_text pairs per eng->lang / lang->eng direction. Languages
+    NLLB-200 was pretrained on have the most data but need the least, so
+    a single cap either starves the languages new to NLLB or gives most of the
+    data to the pretrained ones.'''
+    return (args.max_per_direction_native if lang in NATIVE_LANGS
+            else args.max_per_direction_new)
+
+
 def add_parallel_pairs(pairs, args, rng):
     ds = datasets.load_dataset(*PARALLEL_DATA, split='train')
     texts = ds['text']
@@ -216,7 +233,9 @@ def add_parallel_pairs(pairs, args, rng):
     rows = []
     eng_to = collections.defaultdict(list)  # lang -> [row*2 + is_target_only]
     to_eng = collections.defaultdict(list)  # lang -> [row]
-    multi = []  # rows with at least two clean non-English languages
+    # lang -> rows where lang and at least one other non-English language
+    # have clean text
+    multi = collections.defaultdict(list)
     for i, text in enumerate(texts):
         clean, target_only = {}, {}
         for key, value in json.loads(text).items():
@@ -235,39 +254,63 @@ def add_parallel_pairs(pairs, args, rng):
                     to_eng[lang].append(i)
             for lang in target_only:
                 eng_to[lang].append(i * 2 + 1)
-        if len(clean) - ('eng' in clean) >= 2:
-            multi.append(i)
+        non_eng = [l for l in clean if l != 'eng']
+        if len(non_eng) >= 2:
+            for lang in non_eng:
+                multi[lang].append(i)
 
-    cap = args.max_per_direction
+    pivot_counts = collections.Counter()  # lang -> English-pivot pairs
     for lang in sorted(eng_to):
         pool = eng_to[lang]
+        cap = direction_cap(lang, args)
         for code in rng.sample(pool, min(cap, len(pool))):
             clean, target_only = rows[code // 2]
             target = target_only[lang] if code % 2 else clean[lang]
             pairs.add('eng', lang, clean['eng'], target, 'parallel')
+            pivot_counts[lang] += 1
     for lang in sorted(to_eng):
         pool = to_eng[lang]
+        cap = direction_cap(lang, args)
         for i in rng.sample(pool, min(cap, len(pool))):
             pairs.add(lang, 'eng', rows[i][0][lang], rows[i][0]['eng'],
                       'parallel')
+            pivot_counts[lang] += 1
+    n_pivot = len(pairs)
 
-    n_non_eng = int(args.non_eng_fraction * len(pairs))
-    rng.shuffle(multi)
+    # Non-English pairs, sampled per language: each language gets
+    # non_eng_fraction x its English-pivot pair count, paired with another
+    # language from the same row. Sampling random rows instead gives nearly
+    # all of them to the largest languages, which appear in most multi-way
+    # rows.
     pair_counts = collections.Counter()
-    added = 0
-    for i in multi:
-        if added >= n_non_eng:
-            break
-        clean = rows[i][0]
-        a, b = rng.sample(sorted(l for l in clean if l != 'eng'), 2)
-        if pair_counts[(a, b)] >= args.max_per_non_eng_pair:
-            continue
-        pair_counts[(a, b)] += 1
-        pairs.add(a, b, clean[a], clean[b], 'parallel_x')
-        added += 1
+    involved = collections.Counter()  # lang -> non-English pairs it's in
+    for lang in sorted(multi):
+        quota = round(args.non_eng_fraction * pivot_counts[lang])
+        added = 0
+        pool = multi[lang]
+        for i in rng.sample(pool, len(pool)):
+            if added >= quota:
+                break
+            clean = rows[i][0]
+            other = rng.choice(sorted(l for l in clean
+                                      if l not in ('eng', lang)))
+            a, b = (lang, other) if rng.random() < 0.5 else (other, lang)
+            if pair_counts[(a, b)] >= args.max_per_non_eng_pair:
+                continue
+            pair_counts[(a, b)] += 1
+            pairs.add(a, b, clean[a], clean[b], 'parallel_x')
+            involved[a] += 1
+            involved[b] += 1
+            added += 1
+    n_non_eng = len(pairs) - n_pivot
     log.info('parallel_text: %d English-pivot + %d non-English pairs '
              '(%d distinct non-English directions)',
-             len(pairs) - added, added, len(pair_counts))
+             n_pivot, n_non_eng, len(pair_counts))
+    if involved:
+        counts = np.array(list(involved.values()))
+        log.info('Non-English pairs per language: min %d, median %d, max %d '
+                 '(%s)', counts.min(), np.median(counts), counts.max(),
+                 max(involved, key=involved.get))
 
 
 def add_sft_pairs(pairs, split, upsample):
@@ -419,8 +462,56 @@ def prepare(args):
 # Training
 # ---------------------------------------------------------------------------
 
+_mlflow_active = False  # set by check_mlflow()
+
+
 def mlflow_enabled():
-    return bool(os.environ.get('MLFLOW_TRACKING_URI'))
+    return _mlflow_active
+
+
+def check_mlflow():
+    '''Stops before any work unless MLflow logging will work: the tracking
+    URI is set and the server answers with these credentials. Without this,
+    a missing MLFLOW_TRACKING_URI silently turned logging off.'''
+    global _mlflow_active
+    uri = os.environ.get('MLFLOW_TRACKING_URI')
+    if not uri:
+        unset = [v for v in ('MLFLOW_TRACKING_URI', 'MLFLOW_TRACKING_USERNAME',
+                             'MLFLOW_TRACKING_PASSWORD',
+                             'MLFLOW_EXPERIMENT_NAME')
+                 if not os.environ.get(v)]
+        raise SystemExit(
+            'MLflow logging is on (the default) but MLFLOW_TRACKING_URI is '
+            f'not set. Not set: {", ".join(unset)}. Export them in the shell '
+            'that starts the run, or pass --no-mlflow to run without logging.')
+    if os.environ.get('DISABLE_MLFLOW_INTEGRATION', '').upper() in (
+            '1', 'TRUE', 'YES'):
+        raise SystemExit('DISABLE_MLFLOW_INTEGRATION is set, so the Trainer '
+                         'would not log to MLflow. Unset it, or pass '
+                         '--no-mlflow.')
+    import mlflow
+    # The URI may embed credentials (https://user:pass@host); never print them.
+    def hide_credentials(text):
+        return re.sub(r'//[^/@\s]+@', '//', text)
+    shown = hide_credentials(uri)
+    name = os.environ.get('MLFLOW_EXPERIMENT_NAME')
+    try:
+        # Creates the experiment if it doesn't exist; either way this makes a
+        # request, so a wrong URI or bad credentials fail here.
+        experiment = (mlflow.set_experiment(name) if name
+                      else mlflow.get_experiment('0'))
+    except Exception as e:
+        raise SystemExit(
+            f'Could not reach MLflow at {shown}: {type(e).__name__}: '
+            f'{hide_credentials(str(e))}\n'
+            'Check MLFLOW_TRACKING_URI, MLFLOW_TRACKING_USERNAME and '
+            'MLFLOW_TRACKING_PASSWORD, or pass --no-mlflow.') from e
+    if not name:
+        log.warning('MLFLOW_EXPERIMENT_NAME is not set; logging to the '
+                    'default experiment')
+    log.info('Logging to MLflow at %s, experiment "%s" (id %s)', shown,
+             experiment.name, experiment.experiment_id)
+    _mlflow_active = True
 
 
 class Seq2SeqCollator:
@@ -1118,17 +1209,29 @@ def parse_args():
     p.add_argument('--output_dir', required=True)
     p.add_argument('--base_model', default=BASE_MODEL)
     p.add_argument('--seed', type=int, default=42)
+    p.add_argument('--mlflow', action=argparse.BooleanOptionalAction,
+                   default=True,
+                   help='Log to MLflow (needs MLFLOW_TRACKING_URI etc.). '
+                        'train/eval/all stop at once if logging would fail; '
+                        '--no-mlflow runs without logging')
     p.add_argument('--max_length', type=int, default=512,
                    help='Max source/target tokens; longer training pairs are '
                         'dropped, eval inputs truncated')
 
     g = p.add_argument_group('prepare')
-    g.add_argument('--max_per_direction', type=int, default=6000,
-                   help='Cap on parallel_text pairs per eng->xx / xx->eng')
+    g.add_argument('--max_per_direction_native', type=int, default=6000,
+                   help='Cap on parallel_text pairs per eng->xx / xx->eng '
+                        'direction, for languages NLLB-200 was pretrained on '
+                        '(constants.SALT_LANGUAGE_CODES_NLLB_69_NATIVE)')
+    g.add_argument('--max_per_direction_new', type=int, default=50000,
+                   help='Cap on parallel_text pairs per eng->xx / xx->eng '
+                        'direction, for languages new to NLLB (constants.'
+                        'SALT_LANGUAGE_CODES_NLLB_69_REPURPOSED)')
     g.add_argument('--non_eng_fraction', type=float, default=0.1,
-                   help='Non-English pairs, as a fraction of the English-pivot '
-                        'parallel_text pairs')
-    g.add_argument('--max_per_non_eng_pair', type=int, default=2000)
+                   help='Non-English parallel_text pairs per language, as a '
+                        'fraction of its English-pivot pairs')
+    g.add_argument('--max_per_non_eng_pair', type=int, default=2000,
+                   help='Cap on non-English pairs per direction (xx->yy)')
     g.add_argument('--sft_upsample', type=int, default=2)
     g.add_argument('--limit_rows', type=int,
                    help='Use only the first N parallel_text rows (testing)')
@@ -1179,15 +1282,15 @@ def parse_args():
                         '--sft_epoch')
     g.add_argument('--sft_epochs', type=float, default=1.0,
                    help='Epochs for phase 2')
-    g.add_argument('--sft_epoch_learning_rate', type=float, default=2e-5,
+    g.add_argument('--sft_epoch_learning_rate', type=float, default=5e-5,
                    help='Phase-2 learning rate. Lower than phase 1, so the '
                         'short sft-only phase shifts the output register '
                         'without undoing phase 1')
     g.add_argument('--sft_epoch_warmup_steps', type=int, default=25)
-    g.add_argument('--sft_epoch_eval_steps', type=int, default=100,
+    g.add_argument('--sft_epoch_eval_steps', type=int, default=200,
                    help='Phase 2 is only a few hundred steps, so it needs a '
                         'smaller value than --eval_steps')
-    g.add_argument('--eval_steps', type=int, default=500,
+    g.add_argument('--eval_steps', type=int, default=1000,
                    help='Evaluate (dev loss + chrF) and save a checkpoint '
                         'every N optimizer steps')
     g.add_argument('--eval_on_start', action=argparse.BooleanOptionalAction,
@@ -1247,6 +1350,10 @@ def main():
                         format='%(asctime)s %(levelname)s %(message)s')
     args = parse_args()
     transformers.set_seed(args.seed)
+    # `prepare` logs nothing to MLflow; the other commands check up front, so
+    # a long run can't go unlogged.
+    if args.command != 'prepare' and args.mlflow:
+        check_mlflow()
     if args.command == 'prepare':
         prepare(args)
     elif args.command == 'train':
