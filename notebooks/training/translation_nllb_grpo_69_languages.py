@@ -17,7 +17,18 @@ whose GRPOTrainer is decoder-only (it concatenates prompt and completion into
 one causal sequence and slices the completion off the right-hand end, which
 has no meaning for an encoder-decoder).
 
-Reward (all three summed, weights configurable):
+Two kinds of training row, and the reward differs between them.
+
+A *labelled* row carries a reference translation (7,535 of 10,734) and is
+scored directly against it. A *round-trip* row does not (3,199, all eng->X):
+it carries expected_round_trip_text instead, and is scored by translating the
+rollout back to English with a frozen copy of the starting checkpoint and
+comparing that with the English reference. The round-trip rows are the only
+data for 7 languages -- ber, dag, dga, fra, kab, kln, luy -- and roughly
+double another 5 that have 42 labelled rows each, so they are where this run
+reaches the weak tail at all.
+
+Reward on a labelled row (summed, weights configurable):
 
 - chrF against the reference translation, in [0, 1]. chrF++ (word_order=2)
   with whitespace counted, matching sunflower/rl_rewards.py's
@@ -28,12 +39,33 @@ Reward (all three summed, weights configurable):
 - Length: 0.0 while the completion is within TRANSLATION_LENGTH_BAND of the
   reference's length, tapering to LENGTH_VIOLATION_SCORE outside it.
 
-Both are pure penalties, and the two are summed and clamped to
+A round-trip row keeps those three and adds two more, both of which are
+load-bearing rather than refinements:
+
+- Copy: the fraction of the English source's word trigrams reproduced
+  verbatim in the rollout, scaled by COPY_PENALTY_SCALE. A rollout that
+  simply echoes its English source back-translates perfectly and would score
+  ~1.0 chrF for having translated nothing.
+- Language: -(1 - p(target language)) from a 62MB classifier, averaged over
+  overlapping windows of the rollout. Round-trip chrF is blind to the
+  wrong-language failure and on four of these languages actively rewards it:
+  salt-69 repurposes NLLB tokens, so dag/dga/kln/luy borrow nld_Latn
+  (Dutch), swe_Latn (Swedish), cat_Latn (Catalan) and pol_Latn (Polish). Ask
+  for Dagaare, get Swedish, back-translate swe->eng at which NLLB is
+  excellent, and the English matches almost exactly for a high reward.
+
+Kalenjin is excluded from the branch by default, being the one language that
+is both reward-inverted and outside the classifier's label set; see
+--roundtrip_exclude_languages.
+
+All of these are pure penalties, and they are summed and clamped to
 MAX_COMBINED_PENALTY before chrF is added, so one rollout can lose at most
 one penalty's worth however many detectors it trips, and the total sits in
-[-1, 1]. chrF is the only thing that pays: a reward near 0.4 reads as "a
-decent translation that broke no rules"; anything negative means a penalty
-fired. This differs
+[-1, 1]. That clamp is what makes four penalties safe alongside two: a
+round-trip rollout that copies its source, runs long and drifts out of the
+language has tripped three detectors on one underlying fault, and is charged
+once. chrF is the only thing that pays: a reward near 0.4 reads as "a decent
+translation that broke no rules"; anything negative means a penalty fired. This differs
 from sunflower/rl_rewards.py, where the same two rewards pay +1.0 for
 acceptable output and floor at -1.0. The floors are identical; the ranges are
 not, so each penalty here is half as wide as it is there. Deliberate: paying
@@ -49,12 +81,16 @@ gradient is therefore still dominated by suppressing degeneracy, which is
 what this run is for; the clamp halves that dominance rather than removing
 it.
 
-Only rows of Sunbird/sunflower-posttrain-data (config rl_translations) that
-carry a reference translation are used -- 7,535 of 10,734 train rows. The
-remaining 30% have an empty target_text and would need round-trip
-back-translation scoring; that is deliberately not implemented here yet.
-Language identification (for the wrong-language failure) is also left for
-that stage, since it needs sunflower's classifier.
+The back-translator is a frozen copy of the starting checkpoint, not the
+policy. The reward then means the same thing at the last step as at the
+first, and -- the reason that matters -- the policy cannot co-adapt with it.
+With shared weights, "translate to Dagaare" and "translate back to English"
+are the same parameters, and a private encoding that round-trips perfectly
+while being no language at all would score 1.0 on every round-trip row. That
+is the classic degenerate solution to a round-trip objective; freezing the
+back-translator removes it rather than penalising it. Under --lora_r the
+frozen model is the policy with the adapter switched off, so nothing is
+loaded twice.
 
 Reference normalisation matters and is easy to get wrong: the model is
 trained on normalize_text output and emits ASCII punctuation only, while the
@@ -142,6 +178,7 @@ scripts and ignore MLFLOW_TRACKING_URI / MLFLOW_EXPERIMENT_NAME. Pass
 
 import argparse
 import collections
+import contextlib
 import json
 import logging
 import math
@@ -175,7 +212,8 @@ log = logging.getLogger('nllb69-grpo')
 MLFLOW_EXPERIMENT = 'translation-grpo'
 
 RL_DATA = ('Sunbird/sunflower-posttrain-data', 'rl_translations')
-ORIGIN = 'rl'  # filter_pairs only dedups/length-filters 'parallel*' origins
+ORIGIN = 'rl'
+ORIGIN_ROUNDTRIP = 'rl-roundtrip'  # filter_pairs only dedups/length-filters 'parallel*' origins
 
 
 # ---------------------------------------------------------------------------
@@ -196,8 +234,13 @@ ORIGIN = 'rl'  # filter_pairs only dedups/length-filters 'parallel*' origins
 # that can reach -5 simply outweighs everything else in the batch. Same values
 # as sunflower/rl_rewards.py, but reached from a 0.0 plateau rather than a
 # +1.0 one -- see the module docstring.
-LENGTH_VIOLATION_SCORE = -1.0
+LENGTH_VIOLATION_SCORE = -0.5
 EXCESSIVE_REPETITION_SCORE = -1.0
+# Floor of the language penalty, reached when the classifier gives the target
+# language probability 0 across every window of the rollout. Same magnitude as
+# the other two floors so no single detector can outvote the rest.
+LANGUAGE_DRIFT_SCORE = -1.0  # flat charge for drift; see language_scores
+LANGID_TOP_K = 5
 
 # The most the two penalties can take off together. They detect overlapping
 # failures -- a non-terminating rollout trips both, and so does an empty one
@@ -206,17 +249,21 @@ EXCESSIVE_REPETITION_SCORE = -1.0
 # penalty's worth, so the pair at full strength can at most cancel a perfect
 # translation. Set --max_penalty 2.0 to recover the uncapped sum.
 #
-# Deliberately a cap on the penalties and not a floor on the total
-# (max(0.0, chrf + penalties)), which was the other way to bound this. Under
-# a total floor, chrF is far below 1.0 for the languages this run targets, so
-# *any* rollout tripping *either* penalty lands on exactly 0.0 -- and in a
-# group where every rollout is degenerate, which early on is most of them for
-# the weak targets, all G rewards are then identical and every advantage is
-# zero. Those groups are what this run exists to fix, and the chrF ordering
-# among bad rollouts ("this loop is closer to the reference than that one")
-# is the only gradient they offer. Capping the penalty keeps that ordering
-# while bounding the reward just as tightly. rollouts_zero_variance_groups is
-# the metric that would show the difference.
+# The cap is applied first and --floor_reward then clips the total at 0. An
+# earlier version of this comment argued against the floor on the grounds
+# that it would flatten most groups; measuring it on 13,800 real outputs
+# showed otherwise, and the argument was wrong on both counts. It zeroes
+# 20.7% of rollouts, not the ~52% that trip some penalty, because a small
+# length penalty does not cancel a decent chrF. And it empties a whole group
+# only 4.6% of the time at G=8, 3.8% at G=12, concentrated in Lendu, Ikposo
+# and Berber where ~98% of rollouts are useless anyway.
+#
+# The ordering lost among floored rollouts -- "this repetition loop is closer
+# to the reference than that one" -- is noise, not signal: a loop and a
+# wrong-language reply are equally worthless, and propagating a gradient
+# between them only adds variance. rollouts_zero_variance_groups is the
+# metric to watch; under the floor it counts groups with no usable rollout
+# rather than groups whose rollouts happen to tie.
 MAX_COMBINED_PENALTY = 1.0
 
 # Length ratio (completion / reference characters) that costs nothing, and the
@@ -304,50 +351,407 @@ def _length_band_score(ratio):
                -distance / TRANSLATION_LENGTH_TAPER)
 
 
-def length_scores(texts, references):
-    '''Length penalty from the ratio against the reference translation.
+def length_scores(texts, expected_lengths):
+    '''Length penalty from the ratio of each text to the length expected of
+    a correct translation.
 
-    Measured against the reference rather than the source, so the ratio is
-    script-neutral and the band means the same thing in every language --
-    which is what makes one band usable across 69 target languages in four
-    scripts. A taper rather than a cliff: a step function gives no gradient to
-    a rollout already outside the band.
+    On a labelled row that expectation is the reference translation's own
+    length, so the ratio is script-neutral and the band means the same thing
+    in every language -- which is what makes one band usable across 69 target
+    languages in four scripts. A round-trip row has no target-language
+    reference, so score_rollouts passes the English source length scaled by
+    translation_length_expansion instead. A taper rather than a cliff: a step
+    function gives no gradient to a rollout already outside the band.
 
     This is where a non-terminating rollout is punished hardest. It runs to
     the generation cap, so its ratio is several times 1.0, which puts it on
     the floor whatever its chrF does.
     '''
     scores = []
-    for text, reference in zip(texts, references):
+    for text, expected in zip(texts, expected_lengths):
         body = text.strip()
-        if not body or not len(reference):
+        if not body or expected <= 0:
             scores.append(LENGTH_VIOLATION_SCORE)
             continue
-        scores.append(_length_band_score(len(body) / len(reference)))
+        scores.append(_length_band_score(len(body) / expected))
     return scores
 
 
-def score_rollouts(texts, references, args):
+# ---------------------------------------------------------------------------
+# Round-trip rewards: the copy penalty, the length expectation against
+# English, and language identification. Ported from sunflower/rl_rewards.py
+# for the reason above -- and because the dependency would have to run
+# backwards, since sunflower/data/pretraining.py already imports salt. What is
+# ported is the calibration, not the code: every number here was measured on
+# this corpus or replayed over a real run, and the constants are spelled as
+# they are there so checking for drift is a diff rather than a reading
+# exercise.
+# ---------------------------------------------------------------------------
+
+# --- Copy penalty ---
+#
+# The exploit this exists to close. A round-trip row is scored by translating
+# the rollout back to English, so a rollout that simply echoes its English
+# source back-translates perfectly and scores ~1.0 chrF for having translated
+# nothing. NLLB will do this readily on a language it is unsure of.
+
+# Nigerian Pidgin is exempt: it is English-lexified, so reproducing English
+# wholesale is correct translation there rather than a failure to translate.
+# Measured over this corpus's human references, 9 of the 10 highest-copying
+# rows are Pidgin, whose content-word retention averages 0.47 against a 0.03
+# corpus-wide mean. Exempting it removes the dominant false-positive
+# population without needing a per-language calibration table.
+COPY_EXEMPT_LANGUAGES = frozenset({'pcm'})
+
+# Trigrams, not single words. Borrowing a term with no local equivalent --
+# "photosynthesis", "wifi" -- is what a translator legitimately does, and it
+# is one token long; three consecutive source words surviving verbatim is not
+# borrowing but an untranslated span. Over the human reference translations
+# the trigram rate is 0.0000 (p99 0.000, 0.2% of rows above zero), which is
+# why the penalty needs no tolerance threshold. At bigrams 3.5% of human rows
+# would be penalised; at 4-grams the human rate is also zero but a third of
+# the signal is lost.
+COPY_NGRAM_SIZE = 3
+
+# Below this many source trigrams the rate is too coarse to act on -- a single
+# match in a three-trigram source would read as 0.33 -- so short and
+# name-dense sources are left alone.
+COPY_MIN_SOURCE_NGRAMS = 10
+
+# The raw rate is too weak to correct the behaviour it is aimed at. Replayed
+# over one run's round-trip rollouts, the branch mean still climbed +0.195
+# with the rate subtracted as-is, so copying kept paying; 3x is roughly
+# break-even and 5x turns the drift to -0.118, i.e. the policy is pushed back
+# rather than merely slowed. Human reference translations are unaffected at
+# any of these scales -- the worst of 529 of them takes 0.046 at 5x -- because
+# the human trigram-copy floor is genuinely zero rather than merely small.
+COPY_PENALTY_SCALE = 5.0
+
+# sunflower also caps this penalty at 1.0 individually (COPY_PENALTY_MAX).
+# Not ported: MAX_COMBINED_PENALTY already clamps the sum of the penalties at
+# the same value, and since every penalty here is <= 0, pre-capping one of
+# them cannot change max(-1, sum). One clamp, in one place.
+
+
+def copy_ngrams(text, size=COPY_NGRAM_SIZE):
+    '''`size`-grams over the words of `text` made entirely of lowercase
+    ASCII a-z.
+
+    Deliberately the crudest filter that works: a word carrying a capital, an
+    accent, a digit or attached punctuation is dropped, which removes proper
+    nouns, dates, figures and acronyms -- the things a translation is supposed
+    to reproduce verbatim -- with no sentence-initial tracking and no
+    per-language capitalisation rules, both fragile across this language set.
+    It under-detects rather than over-detects, the right direction for a
+    penalty.
+
+    Dropped words are bridged rather than breaking the sequence, so an n-gram
+    can span a name. That is the simple choice rather than the faithful one:
+    it can form n-grams that were never contiguous, which reads slightly high
+    on name-dense text.
+    '''
+    words = [w for w in text.split()
+             if w.isascii() and w.isalpha() and w.islower()]
+    return [tuple(words[i:i + size]) for i in range(len(words) - size + 1)]
+
+
+def copied_ngram_rate(source, hypothesis):
+    '''Fraction of the source's trigrams reproduced verbatim in
+    `hypothesis`, or None when the source yields fewer than
+    COPY_MIN_SOURCE_NGRAMS of them. None means "not assessable", which
+    callers treat as no penalty rather than as a rate of 0.0.'''
+    source_ngrams = copy_ngrams(source)
+    if len(source_ngrams) < COPY_MIN_SOURCE_NGRAMS:
+        return None
+    hypothesis_ngrams = set(copy_ngrams(hypothesis))
+    return sum(1 for n in source_ngrams if n in hypothesis_ngrams) / len(
+        source_ngrams)
+
+
+def copy_scores(sources, hypotheses, target_languages, apply_to):
+    '''Penalty for leaving the English source untranslated, 0.0 to -inf
+    before the combined clamp. Only the rows flagged in `apply_to` are
+    charged; a labelled row is already scored against a target-language
+    reference, which punishes copying directly.'''
+    scores = []
+    for source, hypothesis, language, applies in zip(
+            sources, hypotheses, target_languages, apply_to):
+        if not applies or language in COPY_EXEMPT_LANGUAGES:
+            scores.append(0.0)
+            continue
+        rate = copied_ngram_rate(source, hypothesis)
+        scores.append(0.0 if rate is None else -COPY_PENALTY_SCALE * rate)
+    return scores
+
+
+# --- Length expectation for a row with no target-language reference ---
+#
+# A round-trip row can only be measured against English
+# (expected_round_trip_text, else the source), scaled by how far a translation
+# into that language expands its source. Measured over the 4,473 usable
+# English->X reference rows of the training split that expansion is 1.08x --
+# except in the Ge'ez syllabary, which carries a whole syllable per glyph and
+# runs 0.68x. Ge'ez is the only split worth making: decomposing the spread
+# across 57 non-Ge'ez languages gives a between-language sd of 0.110 against a
+# within-language, sentence-to-sentence sd of 0.148, so even a perfect
+# per-language table would shrink the total spread only from 0.184 to 0.148 --
+# a fifth of a standard deviation, for fifty-seven entries whose individual
+# medians (30-200 rows each) are themselves noisy.
+TRANSLATION_EXPANSION_GEEZ = 0.68
+TRANSLATION_EXPANSION_DEFAULT = 1.08
+
+GEEZ_SCRIPT_LANGUAGES = frozenset({'amh', 'tir'})
+
+
+def translation_length_expansion(target_language):
+    '''Expected length of a translation into `target_language` relative to
+    its English source.'''
+    return (TRANSLATION_EXPANSION_GEEZ
+            if target_language in GEEZ_SCRIPT_LANGUAGES
+            else TRANSLATION_EXPANSION_DEFAULT)
+
+
+# --- Language identification ---
+#
+# Not optional on this branch, and this is the subtle part. Round-trip chrF is
+# blind to the wrong-language failure, and on four of these languages it
+# actively rewards it: salt-69 repurposes NLLB tokens, and dag/dga/kln/luy
+# borrow nld_Latn (Dutch), swe_Latn (Swedish), cat_Latn (Catalan) and
+# pol_Latn (Polish). Ask for Dagaare, get Swedish; back-translate swe->eng,
+# at which NLLB is excellent, and the result matches the English reference
+# almost exactly for a high reward. Emit real Dagaare and NLLB reads it as
+# broken Swedish, back-translates badly, and the reward falls. Without this
+# penalty the branch pays the policy to abandon the language it is learning.
+LANGID_MODEL = 'Sunbird/sunflower_language_classification'
+
+# Sliding windows rather than whole-text scoring. Whole-text is dominated by
+# whichever language holds most of the mass, so a rollout that keeps the
+# target's morphology and function words while swapping in English content
+# words still classifies as the target with high confidence. Scoring
+# overlapping windows and averaging lets the substituted spans register:
+# measured within-prompt discrimination between a copying rollout and a clean
+# one rose from 20% to 49% of pairs (ties 68% -> 29%) moving from whole text
+# to 10-word windows.
+LANGID_CHUNK_WORDS = 10
+LANGID_CHUNK_WORD_STRIDE = 5
+# Fallback for text that is not whitespace-delimited: not every language
+# separates words with spaces, and a degenerate rollout can arrive as one
+# unbroken run. ~5 characters a word, a reasonable analogue of the word
+# windows rather than a separately tuned size.
+LANGID_CHUNK_CHARS = 50
+LANGID_CHUNK_CHAR_STRIDE = 25
+LANGID_CHUNK_MAX_WORD_CHARS = 20
+
+LANGID_BATCH_SIZE = 256
+
+_langid = {}
+
+
+def langid_supported():
+    '''Language codes the classifier can detect, read from its config so it
+    cannot drift from the checkpoint. Only the config is fetched, not the
+    weights, so this is cheap enough to call while building the data.'''
+    if 'supported' not in _langid:
+        config = transformers.AutoConfig.from_pretrained(LANGID_MODEL)
+        _langid['supported'] = frozenset(config.id2label.values())
+    return _langid['supported']
+
+
+def load_language_classifier(device):
+    '''Load the classifier (62MB, a T5 sequence classifier) onto `device`.'''
+    if 'model' not in _langid:
+        log.info('Loading the language classifier %s', LANGID_MODEL)
+        _langid['tokenizer'] = transformers.AutoTokenizer.from_pretrained(
+            LANGID_MODEL)
+        model = transformers.AutoModelForSequenceClassification.\
+            from_pretrained(LANGID_MODEL).to(device).eval()
+        for parameter in model.parameters():
+            parameter.requires_grad_(False)
+        _langid['model'] = model
+        # Int-keyed: a config loaded from JSON can carry string keys.
+        _langid['id2label'] = {int(i): label for i, label
+                               in model.config.id2label.items()}
+    return _langid
+
+
+def _sliding_windows(length, size, stride):
+    '''Window bounds covering `length` items, with the final window anchored
+    at the end. The anchoring matters: a plain range leaves a tail of up to
+    size - 1 items in no window at all, which would leave the end of a long
+    rollout unscored -- exactly where output that drifts out of the target
+    language tends to drift.'''
+    if length <= size:
+        return [(0, length)]
+    starts = list(range(0, length - size + 1, stride))
+    if starts[-1] + size < length:
+        starts.append(length - size)
+    return [(start, start + size) for start in starts]
+
+
+def language_chunks(text):
+    '''`text` split into overlapping windows for language scoring.'''
+    text = text.strip()
+    if not text:
+        return []
+    words = text.split()
+    spaced = (len(words) > 1
+              and len(text) / len(words) <= LANGID_CHUNK_MAX_WORD_CHARS)
+    if spaced:
+        return [' '.join(words[a:b]) for a, b in _sliding_windows(
+            len(words), LANGID_CHUNK_WORDS, LANGID_CHUNK_WORD_STRIDE)]
+    return [text[a:b] for a, b in _sliding_windows(
+        len(text), LANGID_CHUNK_CHARS, LANGID_CHUNK_CHAR_STRIDE)]
+
+
+def language_probabilities(texts, device):
+    '''Classifier probability distributions for `texts`, one dict each.'''
+    state = load_language_classifier(device)
+    tokenizer, model = state['tokenizer'], state['model']
+    id2label = state['id2label']
+    out = []
+    for start in range(0, len(texts), LANGID_BATCH_SIZE):
+        batch = texts[start:start + LANGID_BATCH_SIZE]
+        enc = tokenizer(batch, return_tensors='pt', padding=True,
+                        truncation=True, max_length=512).to(device)
+        with torch.no_grad():
+            probabilities = model(**enc).logits.float().softmax(-1).cpu()
+        out.extend({id2label[i]: float(p) for i, p in enumerate(row)}
+                   for row in probabilities)
+    return out
+
+
+def language_scores(texts, target_languages, apply_to, device,
+                    top_k=LANGID_TOP_K):
+    '''Penalty for drifting out of the target language, gated on a top-k test.
+
+    The classifier's distribution is averaged over the text's chunks and the
+    target language looked up in that mean distribution. A rollout whose
+    target language is among the top `top_k` labels is charged nothing. The
+    penalty is here to catch output that is some other language entirely, not
+    to arbitrate between neighbours no classifier can separate: the Ugandan
+    Bantu cluster (Runyoro, Rutooro, Rukiga, Runyankole, Ruruuli, Lusoga) is
+    routinely confused, and under the ungated score a *correct* Runyoro
+    rollout with chrF 0.64 was charged -0.67 because Runyankole ranked above
+    it -- spending most of the reward range on a distinction the detector
+    cannot make.
+
+    Flat LANGUAGE_DRIFT_SCORE outside the top k, 0.0 inside it -- no grading
+    by p(target). The classifier is neither reliable nor calibrated, so the
+    size of its probability mass carries no information worth spending reward
+    range on; only the rank is worth reading, and only coarsely. Grading by
+    it also made the penalty a per-language offset of whatever that language
+    happened to score, which is noise dressed as a measurement.
+
+    Only the rows flagged in `apply_to` are charged. A row whose target
+    language the classifier has no label for scores 0.0. That should not
+    happen: load_rl_prompts drops those rows from the branch rather than
+    training on them unguarded.
+    '''
+    chunks, owners = [], []
+    for i, (text, language, applies) in enumerate(
+            zip(texts, target_languages, apply_to)):
+        if not applies or language not in langid_supported():
+            continue
+        pieces = language_chunks(text)
+        chunks.extend(pieces)
+        owners.extend([i] * len(pieces))
+    scores = [0.0] * len(texts)
+    if not chunks:
+        return scores
+    summed = collections.defaultdict(collections.Counter)
+    for owner, probabilities in zip(owners, language_probabilities(
+            chunks, device)):
+        summed[owner].update(probabilities)
+    for owner, totals in summed.items():
+        if not any(language == target_languages[owner]
+                   for language, _ in totals.most_common(top_k)):
+            scores[owner] = LANGUAGE_DRIFT_SCORE
+    return scores
+
+
+def score_rollouts(texts, references, args, sources=None, target_languages=None,
+                   roundtrip=None, back_translations=None, device='cpu'):
     '''Per-rollout reward components and their weighted total.
 
-    The two penalties are weighted, summed and then clamped to --max_penalty
-    before chrF is added, so correlated failures are charged once; see
-    MAX_COMBINED_PENALTY.
+    Two branches, chosen per rollout by the boolean `roundtrip`. Passing no
+    round-trip arguments scores every rollout on the labelled branch, which is
+    what the labelled-only phase did.
 
-    The returned 'penalty' component is that clamped weighted sum, while
-    'repetition' and 'length' are the raw per-detector scores behind it, so a
-    sample log reading `rep=-1.000 len=-1.000 penalty=-1.000` is the clamp
-    doing its job and `reward_penalty` tracks what the policy actually paid.
+    labelled
+        chrF(rollout, reference) against the target-language reference, with
+        the repetition and length penalties. The length band is measured
+        against the reference's own length.
+
+    round-trip
+        chrF(back-translation, reference), where `references` holds
+        expected_round_trip_text (English) and `back_translations` holds the
+        rollout translated back to English by the frozen back-translator. Adds
+        the copy and language penalties -- see copy_scores and language_scores
+        for why neither is optional -- and measures length against the English
+        reference scaled by translation_length_expansion, there being no
+        target-language reference to measure against.
+
+    The penalties are weighted, summed and clamped to --max_penalty before
+    chrF is added, so correlated failures are charged once; see
+    MAX_COMBINED_PENALTY. That clamp is what makes the round-trip branch's
+    four penalties safe to add to the labelled branch's two: a round-trip
+    rollout that copies its source, runs long and drifts out of the language
+    trips three detectors on one underlying fault and is still charged once.
+
+    The returned 'penalty' component is that clamped weighted sum; the others
+    are the raw per-detector scores behind it, so a sample log reading
+    `copy=-1.700 len=-1.000 penalty=-1.000` is the clamp doing its job and
+    `reward_penalty` tracks what the policy actually paid.
+
+    Under --floor_reward (the default) the total is then clipped at 0, so
+    `chrf=+0.180 penalty=-1.000` logs as a reward of 0.000 rather than
+    -0.820. The components still show what happened; only the total is
+    clipped. A group where every rollout floors has no gradient, which is the
+    intent -- see MAX_COMBINED_PENALTY.
     '''
-    chrf = np.array(chrf_scores(texts, references))
+    n = len(texts)
+    roundtrip = (np.zeros(n, dtype=bool) if roundtrip is None
+                 else np.asarray(roundtrip, dtype=bool))
+    any_roundtrip = bool(roundtrip.any())
+    if any_roundtrip and (sources is None or target_languages is None
+                          or back_translations is None):
+        raise ValueError('round-trip rollouts need sources, target_languages '
+                         'and back_translations')
+
+    # What chrF sees: the rollout itself on a labelled row, its
+    # back-translation on a round-trip row. Both are compared with
+    # `references`, which holds whichever reference the row carries.
+    scored = ([back_translations[i] if roundtrip[i] else texts[i]
+               for i in range(n)] if any_roundtrip else list(texts))
+    chrf = np.array(chrf_scores(scored, references))
+
+    # Every other detector reads the rollout, not the back-translation: they
+    # are judging what the policy produced.
     repetition = np.array(repetition_scores(texts))
-    length = np.array(length_scores(texts, references))
+    expected_lengths = [
+        len(reference) * (translation_length_expansion(target_languages[i])
+                          if roundtrip[i] else 1.0)
+        for i, reference in enumerate(references)]
+    length = np.array(length_scores(texts, expected_lengths))
+
+    if any_roundtrip:
+        copy = np.array(copy_scores(sources, texts, target_languages,
+                                    roundtrip))
+        langid = np.array(language_scores(texts, target_languages, roundtrip,
+                                          device, args.langid_top_k))
+    else:
+        copy = np.zeros(n)
+        langid = np.zeros(n)
+
     penalty = np.maximum(
-        args.repetition_weight * repetition + args.length_weight * length,
+        args.repetition_weight * repetition + args.length_weight * length
+        + args.copy_weight * copy + args.langid_weight * langid,
         -abs(args.max_penalty))
     total = args.chrf_weight * chrf + penalty
+    if args.floor_reward:
+        total = np.maximum(total, 0.0)
     return total, {'chrf': chrf, 'repetition': repetition, 'length': length,
-                   'penalty': penalty}
+                   'copy': copy, 'langid': langid, 'penalty': penalty}
 
 
 # ---------------------------------------------------------------------------
@@ -355,7 +759,8 @@ def score_rollouts(texts, references, args):
 # ---------------------------------------------------------------------------
 
 def finalise_pairs(pairs, tokenizer, lang_ids, eval_texts, args, name,
-                   limit=None, seed=42, max_source_tokens=0):
+                   limit=None, seed=42, max_source_tokens=0,
+                   filter_fn=None):
     '''Normalise, filter, length-filter and summarise a set of pairs.
 
     filter_pairs applies normalize_text to both sides and drops empty,
@@ -369,8 +774,11 @@ def finalise_pairs(pairs, tokenizer, lang_ids, eval_texts, args, name,
     `limit` samples rather than truncates: these splits are ordered by
     language, so a head slice covers a handful of languages rather than the
     range being measured.
+
+    filter_fn replaces sft.filter_pairs, for the round-trip rows that its
+    identical-pair check would throw away; see filter_roundtrip_pairs.
     '''
-    pairs = sft.filter_pairs(pairs, eval_texts)
+    pairs = (filter_fn or sft.filter_pairs)(pairs, eval_texts)
     if not len(pairs):
         raise SystemExit(
             f'{name}: no pairs survived filtering. If they were all dropped '
@@ -391,7 +799,7 @@ def finalise_pairs(pairs, tokenizer, lang_ids, eval_texts, args, name,
         ds = ds.shuffle(seed=seed).select(range(limit))
         log.info('%s: sampled %d pairs', name, limit)
     rows = ds.select_columns(['source', 'target', 'source.language',
-                              'target.language']).to_dict()
+                              'target.language', 'origin']).to_dict()
     directions = list(zip(rows['source.language'], rows['target.language']))
     counts = collections.Counter(t for _, t in directions)
     log.info('%s: %d pairs, %d directions, %d target languages '
@@ -401,30 +809,112 @@ def finalise_pairs(pairs, tokenizer, lang_ids, eval_texts, args, name,
     return rows
 
 
-def load_rl_prompts(args, tokenizer, lang_ids, eval_texts):
-    '''Labelled rl_translations train rows: the prompts GRPO samples from.
+def filter_roundtrip_pairs(pairs, eval_texts):
+    '''sft.filter_pairs for round-trip rows: the same normalisation and the
+    same salt-69 leakage filter, without the src == tgt drop.
 
-    Rows with an empty target_text are dropped -- they are the round-trip
-    rows, which need a back-translation pass this script does not do yet.
+    The "target" of a round-trip row is expected_round_trip_text, the English
+    back-translation reference, and it equals the English source in 3,047 of
+    the 3,199 rows. That is the normal case rather than a corrupt row, so
+    filter_pairs would discard 95% of the branch. Everything else it does
+    still applies, which is why this is a near-copy and not a bypass: the
+    normalisation has to match (the model emits ASCII punctuation while the
+    references carry typographic punctuation, so chrF against an
+    unnormalised reference would penalise correct output for every curly
+    apostrophe), and the leakage filter has to run (measured: 0 of 3,199
+    round-trip sources and 0 of their references are in salt-69 today, but
+    nothing stops a future revision of the dataset adding some).
+    '''
+    keep = sft.Pairs()
+    dropped = collections.Counter()
+    data = pairs.data
+    for src, tgt, sl, tl, origin in zip(
+            *(data[c] for c in sft.Pairs.COLUMNS)):
+        src, tgt = sft.normalize_text(src), sft.normalize_text(tgt)
+        if not src or not tgt:
+            dropped['empty'] += 1
+            continue
+        if src in eval_texts or tgt in eval_texts:
+            dropped['in salt-69'] += 1
+            continue
+        keep.add(sl, tl, src, tgt, origin)
+    log.info('Filtered round-trip: kept %d, dropped %s', len(keep),
+             dict(dropped))
+    return keep
+
+
+def load_rl_prompts(args, tokenizer, lang_ids, eval_texts):
+    '''The prompts GRPO samples from, both kinds, in one row set.
+
+    A row with a target_text is a labelled prompt, scored against that
+    reference. A row without one is a round-trip prompt: it carries
+    expected_round_trip_text instead, is always eng->X, and is scored by
+    translating the rollout back to English. `origin` tells the two apart
+    downstream, and a row's branch is fixed here -- nothing later re-derives
+    it from whether a field is empty.
+
+    Round-trip rows are kept at their natural rate, ~30% of the corpus. They
+    are the only data for 7 languages (ber, dag, dga, fra, kab, kln, luy) and
+    roughly double another 5 (gwr, ikx, kdj, led, lsm, at 42 labelled rows
+    each), so the branch is where this run can reach the weak tail at all.
     '''
     ds = datasets.load_dataset(*RL_DATA, split='train')
     if args.limit_rows:
         ds = ds.select(range(min(args.limit_rows, len(ds))))
     pairs = sft.Pairs()
-    n_unlabelled = 0
-    for source, target, src_lang, tgt_lang in zip(
-            ds['source_text'], ds['target_text'], ds['source_language'],
+    roundtrip = sft.Pairs()
+    excluded = collections.Counter()
+    unsupported = set()
+    for source, target, round_trip, src_lang, tgt_lang in zip(
+            ds['source_text'], ds['target_text'],
+            ds['expected_round_trip_text'], ds['source_language'],
             ds['target_language']):
-        if not target:
-            n_unlabelled += 1
+        if target:
+            pairs.add(src_lang, tgt_lang, source, target, ORIGIN)
             continue
-        pairs.add(src_lang, tgt_lang, source, target, ORIGIN)
-    log.info('rl_translations/train: %d rows, %d without a reference '
-             'translation (dropped; round-trip scoring is not implemented '
-             'yet)', len(ds), n_unlabelled)
-    return finalise_pairs(pairs, tokenizer, lang_ids, eval_texts, args,
+        if not args.roundtrip:
+            excluded['--no-roundtrip'] += 1
+        elif tgt_lang in args.roundtrip_exclude_languages:
+            excluded[f'--roundtrip_exclude_languages ({tgt_lang})'] += 1
+        elif args.langid_weight and tgt_lang not in langid_supported():
+            # Without a classifier label there is no wrong-language guard,
+            # and on this branch that is not a missing nicety: the reward
+            # would pay the policy for emitting the European language whose
+            # NLLB token this language borrows. Kalenjin (cat_Latn) is the
+            # case that prompted the check; anything else that appears here
+            # is the same problem and gets the same answer.
+            unsupported.add(tgt_lang)
+            excluded[f'no classifier label ({tgt_lang})'] += 1
+        elif not round_trip and not source:
+            excluded['no round-trip reference'] += 1
+        else:
+            # expected_round_trip_text differs from source_text in 162 of
+            # 3,199 rows, so it is the reference even though it usually
+            # matches; falling back to the source covers a blank one.
+            roundtrip.add(src_lang, tgt_lang, source, round_trip or source,
+                          ORIGIN_ROUNDTRIP)
+    log.info('rl_translations/train: %d rows, %d labelled, %d round-trip, '
+             '%d excluded %s', len(ds), len(pairs), len(roundtrip),
+             sum(excluded.values()), dict(excluded))
+    if unsupported:
+        log.warning('Round-trip rows dropped for %s: the language '
+                    'classifier has no label for them, so the '
+                    'wrong-language penalty cannot be applied and the '
+                    'round-trip reward alone would favour the European '
+                    'language whose NLLB token they borrow. Pass '
+                    '--langid_weight 0 to train on them unguarded.',
+                    ', '.join(sorted(unsupported)))
+    rows = finalise_pairs(pairs, tokenizer, lang_ids, eval_texts, args,
                           'train',
                           max_source_tokens=args.max_source_tokens)
+    if len(roundtrip):
+        extra = finalise_pairs(
+            roundtrip, tokenizer, lang_ids, eval_texts, args,
+            'train/round-trip', max_source_tokens=args.max_source_tokens,
+            filter_fn=filter_roundtrip_pairs)
+        rows = {column: rows[column] + extra[column] for column in rows}
+        log.info('train: %d prompts in total', len(rows['source']))
+    return rows
 
 
 def load_dev_pairs(args, tokenizer, lang_ids, eval_texts):
@@ -458,20 +948,33 @@ def load_dev_pairs(args, tokenizer, lang_ids, eval_texts):
                           limit=args.dev_limit, seed=args.seed)
 
 
-def direction_blocks(directions, block_size, rng):
-    '''Row indices in blocks that each hold one translation direction.
+def prompt_blocks(directions, block_size, rng, group_by_direction=False):
+    '''Row indices in blocks, one block per training step.
 
-    Mixed-direction blocks work (generate takes a per-row target-language
-    prefix, see generate_rollouts) but cost two things. Padding: one direction
-    per block keeps source lengths and scripts together. And advantage
-    scaling: under --scale_rewards batch the denominator is the spread over
-    the whole step, which between languages is dominated by how well the model
-    translates each one (chrF ~0.6 for Afrikaans against ~0.2 for the weak
-    tail) rather than by how the rollouts within a group differ.
+    Mixed by default. A long-tail language has only tens of prompts, so one
+    direction per block concentrates its entire contribution into a handful of
+    isolated steps -- Luhya's 87 round-trip rows are 5 blocks of 16 among 512
+    steps, each landing at whatever the schedule's learning rate happens to be
+    -- which is close to the worst delivery schedule available for it. Mixing
+    spreads those rows over tens of steps, averaged each time with other
+    languages. generate_rollouts takes a per-row target-language prefix, so
+    mixed blocks need nothing else from the training loop.
 
-    Blocks short of block_size are pooled and re-split rather than dropped, so
-    every row is used and only the pooled tail mixes directions.
+    What mixing costs: padding, since source lengths and scripts no longer
+    travel together, and the meaning of --scale_rewards batch, whose
+    denominator becomes the reward spread *across* the step's languages (chrF
+    ~0.6 for Afrikaans against ~0.2 for the weak tail) rather than within one.
+    Group baselines are unaffected either way, a GRPO group being one prompt.
+
+    group_by_direction restores one direction per block. Blocks short of
+    block_size are then pooled and re-split rather than dropped, so every row
+    is used and only the pooled tail mixes directions.
     '''
+    if not group_by_direction:
+        order = list(range(len(directions)))
+        rng.shuffle(order)
+        return [order[start:start + block_size]
+                for start in range(0, len(order), block_size)]
     by_direction = collections.defaultdict(list)
     for i, direction in enumerate(directions):
         by_direction[direction].append(i)
@@ -555,6 +1058,35 @@ def generate_rollouts(model, tokenizer, lang_ids, sources, src_langs,
     return enc['input_ids'], enc['attention_mask'], sequences, texts
 
 
+def back_translate(model, tokenizer, lang_ids, texts, source_languages,
+                   args):
+    '''Translate round-trip rollouts back to English for scoring.
+
+    Greedy (num_beams=1, no sampling): this is a measurement, not a rollout.
+    Sampling here would add variance to every round-trip reward that has
+    nothing to do with the rollout being scored, and within a group that
+    variance does not cancel -- it is exactly what the advantage reads.
+
+    `model` is the frozen back-translator, never the policy being trained;
+    see backtranslator() for why. An empty rollout is not sent to the model
+    at all: generate would return something for it, and whatever that was
+    would be scored as if the policy had produced a translation.
+    '''
+    out = [''] * len(texts)
+    index = [i for i, text in enumerate(texts) if text.strip()]
+    if not index:
+        return out
+    translated = sft.translate(
+        model, tokenizer, lang_ids, [texts[i] for i in index],
+        [source_languages[i] for i in index], 'eng',
+        batch_size=args.backtranslate_batch_size, num_beams=1,
+        max_new_tokens=args.rollout_max_new_tokens,
+        max_length=args.max_length, length_cap=args.rollout_length_cap)
+    for i, text in zip(index, translated):
+        out[i] = text
+    return out
+
+
 def completion_mask(sequences, pad_id):
     '''Which positions of `sequences[:, 1:]` the policy actually chose.
 
@@ -599,11 +1131,18 @@ def group_advantages(rewards, num_generations, scale):
                but small absolute advantages, so it wants a higher lr.
       batch -- divide by the spread over the whole step. A low-spread group
                gets a correspondingly small advantage instead of being
-               amplified to unit magnitude. With direction-blocked steps that
-               denominator is within-language. The default.
-      group -- divide by each group's own std (unit variance per group). This
-               amplifies the tiny gaps in a group where every rollout is
-               equally bad to full strength.
+               amplified to unit magnitude. With mixed steps
+               (the prompt_blocks default) that denominator is the spread
+               *across* the step's languages, so a hard language's
+               within-group gaps are divided by a figure set largely by the
+               easy languages sharing the step. --block_directions keeps it
+               within one language; group is immune to it.
+      group -- divide by each group's own std (unit variance per group). The
+               default, and the one that pairs with mixed steps: the
+               denominator is within-group, so it cannot be set by the other
+               languages sharing the step. The cost is that it amplifies the
+               tiny gaps in a group where every rollout is equally bad to
+               full strength.
     '''
     grouped = rewards.reshape(-1, num_generations)
     advantages = grouped - grouped.mean(axis=1, keepdims=True)
@@ -617,6 +1156,48 @@ def group_advantages(rewards, num_generations, scale):
 # ---------------------------------------------------------------------------
 # Training
 # ---------------------------------------------------------------------------
+
+def backtranslator(model, tokenizer, lang_ids, args, device):
+    '''Build the callable that back-translates round-trip rollouts, or None
+    if nothing needs one.
+
+    A frozen copy of the starting checkpoint, not the policy. Two reasons,
+    and the second is the one that matters. The reward stays stationary, so a
+    round-trip score means the same thing at step 300 as at step 1 and the
+    curve is readable. And the policy cannot co-adapt with it: with shared
+    weights, "translate to Dagaare" and "translate back to English" are the
+    same parameters, and a private encoding that round-trips perfectly while
+    being no language at all scores 1.0 on every round-trip row. That is the
+    classic degenerate solution to a round-trip objective, and freezing the
+    back-translator removes it rather than penalising it.
+
+    Under --lora_r the policy is the same base weights plus an adapter, so
+    the frozen model is the policy with the adapter switched off rather than a
+    second copy -- loading one would defeat the point of using LoRA to fit a
+    larger model on a smaller card. The adapter goes off for the duration of
+    one back-translation call and back on immediately, which is why this
+    returns a callable rather than a model: holding disable_adapter() open
+    across the step would also disable it for the policy gradient. Untested,
+    as the rest of the LoRA path is -- peft is not installed in /venv/main.
+    '''
+    if not args.roundtrip:
+        return None
+    if args.lora_r:
+        def with_adapter_off(texts, source_languages):
+            with model.disable_adapter():
+                return back_translate(model, tokenizer, lang_ids, texts,
+                                      source_languages, args)
+        return with_adapter_off
+    log.info('Loading a frozen back-translator from %s (bf16, no grad). '
+             'It is never updated, so a round-trip reward means the same '
+             'thing at the last step as at the first', args.base_model)
+    frozen = transformers.AutoModelForSeq2SeqLM.from_pretrained(
+        args.base_model, dtype=torch.bfloat16).to(device).eval()
+    for parameter in frozen.parameters():
+        parameter.requires_grad_(False)
+    return lambda texts, source_languages: back_translate(
+        frozen, tokenizer, lang_ids, texts, source_languages, args)
+
 
 def apply_lora(model, args):
     '''Wrap the model in a LoRA adapter (optional; needs peft installed).
@@ -702,10 +1283,14 @@ def log_metrics(metrics, step):
 
 
 def log_rollout_samples(sources, texts, references, total, components,
-                        num_generations, step):
+                        num_generations, step, back_translations=None):
     '''Show the group with the widest reward spread: its best and worst
     rollout, with the reward breakdown. One group per call -- enough to see
-    what the reward is actually paying for, cheap enough to leave on.'''
+    what the reward is actually paying for, cheap enough to leave on.
+
+    On a round-trip group the back-translation is shown too: it is what chrF
+    actually scored, so without it the numbers cannot be read against the
+    text.'''
     grouped = total.reshape(-1, num_generations)
     i = int(np.argmax(grouped.max(axis=1) - grouped.min(axis=1)))
     group = total[i * num_generations:(i + 1) * num_generations]
@@ -717,6 +1302,8 @@ def log_rollout_samples(sources, texts, references, total, components,
         parts = ' '.join(f'{k}={v[j]:+.3f}' for k, v in components.items())
         lines.append(f'  {label} r={total[j]:+.3f} ({parts}): '
                      f'{texts[j][:160]}')
+        if back_translations and back_translations[j]:
+            lines.append(f'    back-translated: {back_translations[j][:160]}')
     log.info('\n'.join(lines))
 
 
@@ -770,9 +1357,16 @@ def train(args):
         parameters, lr=args.learning_rate, weight_decay=args.weight_decay,
         bf16_stochastic_round=True)
 
-    blocks = direction_blocks(
+    back_translate_rollouts = backtranslator(
+        model, tokenizer, lang_ids, args, device)
+    if back_translate_rollouts and args.langid_weight:
+        # Fail here rather than 50 steps in, and put it on the policy's
+        # device: it is 62MB against the policy's 2.7GB.
+        load_language_classifier(device)
+
+    blocks = prompt_blocks(
         list(zip(train_rows['source.language'], train_rows['target.language'])),
-        args.prompts_per_step, rng)
+        args.prompts_per_step, rng, args.block_directions)
     if not blocks:
         raise SystemExit('No training pairs survived filtering.')
     steps_per_epoch = len(blocks)
@@ -824,18 +1418,48 @@ def train(args):
                 src_langs = [sft.UNKNOWN_SOURCE
                              if rng.random() < args.src_lang_dropout else s
                              for s in src_langs]
-            references = [train_rows['target'][i] for i in block
-                          for _ in range(args.num_generations)]
+            # Per rollout, not per prompt: every reward component is
+            # scored per rollout, and a block can hold both kinds of row
+            # whenever a language has labelled and round-trip rows in the
+            # same direction.
+            def per_rollout(values):
+                return [v for v in values for _ in range(args.num_generations)]
+
+            references = per_rollout(train_rows['target'][i] for i in block)
+            roundtrip = per_rollout(
+                train_rows['origin'][i] == ORIGIN_ROUNDTRIP for i in block)
+            # The source text itself, for the copy penalty to compare the
+            # rollout against. Every round-trip row is eng->X, so on the rows
+            # the penalty applies to this is the English side. src_langs may
+            # have been blanked by --src_lang_dropout; the text has not.
+            rollout_sources = per_rollout(sources)
+            rollout_tgt_langs = per_rollout(tgt_langs)
 
             enc_ids, enc_mask, sequences, texts = generate_rollouts(
                 model, tokenizer, lang_ids, sources, src_langs, tgt_langs,
                 args)
             t_gen = time.time() - t0
 
-            total, components = score_rollouts(texts, references, args)
+            back_translations = None
+            t_back = 0.0
+            if any(roundtrip):
+                t_back = time.time()
+                index = [i for i, r in enumerate(roundtrip) if r]
+                translated = back_translate_rollouts(
+                    [texts[i] for i in index],
+                    [rollout_tgt_langs[i] for i in index])
+                back_translations = [''] * len(texts)
+                for i, text in zip(index, translated):
+                    back_translations[i] = text
+                t_back = time.time() - t_back
+
+            total, components = score_rollouts(
+                texts, references, args, sources=rollout_sources,
+                target_languages=rollout_tgt_langs, roundtrip=roundtrip,
+                back_translations=back_translations, device=device)
             advantages = group_advantages(
                 total, args.num_generations, args.scale_rewards)
-            t_reward = time.time() - t0 - t_gen
+            t_reward = time.time() - t0 - t_gen - t_back
 
             mask = completion_mask(sequences, pad_id)
             n_rollouts = sequences.shape[0]
@@ -897,33 +1521,81 @@ def train(args):
                 'rollouts_eos_rate': float(terminated.mean()),
                 'rollouts_repetition_rate': float(
                     (components['repetition'] < 0).mean()),
+                'rollouts_roundtrip_rate': float(np.mean(roundtrip)),
                 'time_generation': t_gen,
+                'time_backtranslation': t_back,
                 'time_reward': t_reward,
                 'time_step': time.time() - t0,
             }
+            # Branch-split chrF, because the two measure different things: a
+            # labelled row's chrF is the rollout against a target-language
+            # reference, a round-trip row's is its back-translation against
+            # English. Averaging them into one number would be meaningless.
+            # Only present on steps that have that kind of row, which is why
+            # the running mean below tolerates a missing key.
+            mask_rt = np.asarray(roundtrip, dtype=bool)
+            # A group is one prompt and a prompt's branch is fixed, so every
+            # rollout of a group is on the same branch and this is exact.
+            group_is_rt = mask_rt.reshape(-1, args.num_generations)[:, 0]
+            flat = grouped.std(axis=1) < 1e-6
+            # Worth splitting, not just aggregating. Three of the
+            # round-trip penalties can each reach their floor independently,
+            # so the clamp binds far more often on that branch -- and when it
+            # binds for every rollout of a group, the only signal left is the
+            # back-translation's chrF. If zero_variance_roundtrip climbs
+            # towards 1.0 while the labelled one stays low, the branch has
+            # stopped teaching anything and --max_penalty is the lever, not
+            # --temperature.
+            #
+            # nan, not a skipped key, when a step has none of a branch: the
+            # keys then stay the same on every step, so the MLflow chart is
+            # one series with gaps rather than a series that appears and
+            # disappears, and the running mean below ignores the gaps.
+            for name, rollouts, groups in (
+                    ('roundtrip', mask_rt, group_is_rt),
+                    ('labelled', ~mask_rt, ~group_is_rt)):
+                metrics[f'reward_chrf_{name}'] = (
+                    float(components['chrf'][rollouts].mean())
+                    if rollouts.any() else math.nan)
+                metrics[f'rollouts_zero_variance_{name}'] = (
+                    float(flat[groups].mean())
+                    if groups.any() else math.nan)
             metrics.update({f'reward_{k}': float(v.mean())
                             for k, v in components.items()})
             history.append(metrics)
 
             if step % args.logging_steps == 0 or step == 1:
-                mean = {k: float(np.mean([h[k] for h in history]))
-                        for k in metrics}
+                # nanmean, because the per-branch keys are nan on a step
+                # that had none of that branch; a window with none at all
+                # stays nan rather than warning.
+                def window_mean(key):
+                    values = [h[key] for h in history if key in h]
+                    values = [v for v in values if not math.isnan(v)]
+                    return float(np.mean(values)) if values else math.nan
+
+                mean = {k: window_mean(k) for k in metrics}
                 log.info(
                     'step %d/%d | reward %.3f (chrf %.3f pen %.3f) | '
-                    'spread %.3f zero-var %.2f | %.0f tok eos %.2f rep %.2f | '
-                    'loss %.4f gn %.2f lr %.2g | %.1fs (gen %.1f)',
+                    'spread %.3f zero-var %.2f | %.0f tok eos %.2f rep %.2f '
+                    'rt %.2f zv-rt %.2f | loss %.4f gn %.2f lr %.2g | '
+                    '%.1fs (gen %.1f bt %.1f)',
                     step, total_steps, mean['reward_total'],
                     mean['reward_chrf'], mean['reward_penalty'],
                     mean['reward_spread'],
                     mean['rollouts_zero_variance_groups'],
                     mean['rollouts_mean_tokens'], mean['rollouts_eos_rate'],
-                    mean['rollouts_repetition_rate'], mean['train_loss'],
+                    mean['rollouts_repetition_rate'],
+                    mean['rollouts_roundtrip_rate'],
+                    mean['rollouts_zero_variance_roundtrip'],
+                    mean['train_loss'],
                     mean['train_grad_norm'], mean['train_lr'],
-                    mean['time_step'], mean['time_generation'])
+                    mean['time_step'], mean['time_generation'],
+                    mean['time_backtranslation'])
                 log_metrics(mean, step)
             if args.log_samples_steps and step % args.log_samples_steps == 0:
                 log_rollout_samples(sources, texts, references, total,
-                                    components, args.num_generations, step)
+                                    components, args.num_generations, step,
+                                    back_translations)
 
             if step % args.eval_steps == 0 or step == total_steps:
                 scores = evaluate_dev(model, tokenizer, lang_ids, dev, args)
@@ -1031,9 +1703,20 @@ def parse_args():
                         'that mode. 0 = always give the source language')
 
     g = p.add_argument_group('rollouts')
-    g.add_argument('--num_generations', type=int, default=8,
+    g.add_argument('--num_generations', type=int, default=12,
                    help='Rollouts per prompt (the GRPO group). Below ~4 the '
-                        'group mean is too noisy to be a baseline')
+                        'group mean is too noisy to be a baseline. Raising 8 '
+                        '-> 12 costs 50%% more generation per step and cuts '
+                        'the rate of groups with no usable rollout by '
+                        '60-80%% in the mid-tail languages (--floor_reward)')
+    g.add_argument('--block_directions',
+                   action=argparse.BooleanOptionalAction, default=False,
+                   help='Put one translation direction in each step instead '
+                        'of mixing them. Better padding, and it keeps the '
+                        '--scale_rewards batch denominator within one '
+                        'language, but it delivers a long-tail language\'s '
+                        'whole contribution in a handful of isolated steps; '
+                        'see prompt_blocks')
     g.add_argument('--prompts_per_step', type=int, default=16,
                    help='Prompts per optimizer step; rollouts per step is '
                         'this x --num_generations')
@@ -1057,15 +1740,58 @@ def parse_args():
     g.add_argument('--chrf_weight', type=float, default=1.0)
     g.add_argument('--repetition_weight', type=float, default=1.0)
     g.add_argument('--length_weight', type=float, default=1.0)
+    g.add_argument('--copy_weight', type=float, default=1.0,
+                   help='Weight of the untranslated-source penalty. '
+                        'Round-trip rows only, where echoing the English '
+                        'source back-translates perfectly and would '
+                        'otherwise score ~1.0 for translating nothing')
+    g.add_argument('--langid_weight', type=float, default=1.0,
+                   help='Weight of the wrong-language penalty. Round-trip '
+                        'rows only. 0 disables it, and also stops dropping '
+                        'rows whose language the classifier cannot detect -- '
+                        'see load_rl_prompts for what that costs')
+    g.add_argument('--langid_top_k', type=int, default=LANGID_TOP_K,
+                   help='Charge the flat wrong-language penalty only when '
+                        'the target language falls outside the classifier\'s '
+                        'top k labels, so mutually confusable neighbours go '
+                        'unpenalised. 1 charges whenever its single best '
+                        'label is not the target. See language_scores')
+    g.add_argument('--floor_reward', action=argparse.BooleanOptionalAction,
+                   default=True,
+                   help='Clip the total reward at 0, so a rollout whose '
+                        'penalties outweigh its chrF scores exactly 0 rather '
+                        'than going negative. --no-floor_reward restores the '
+                        'unbounded total that runs 1 and 2 used; see '
+                        'MAX_COMBINED_PENALTY')
     g.add_argument('--max_penalty', type=float, default=MAX_COMBINED_PENALTY,
                    help='Cap, as a magnitude, on the summed repetition and '
                         'length penalties, so a rollout tripping both is '
                         'charged once; see MAX_COMBINED_PENALTY. 2.0 '
                         'recovers the uncapped sum')
     g.add_argument('--scale_rewards', choices=['none', 'batch', 'group'],
-                   default='batch',
+                   default='group',
                    help='How group advantages are normalised; see '
                         'group_advantages')
+
+    g = p.add_argument_group(
+        'round-trip rows (no reference translation)')
+    g.add_argument('--roundtrip', action=argparse.BooleanOptionalAction,
+                   default=True,
+                   help='Train on the 3,199 rows with no reference '
+                        'translation by translating each rollout back to '
+                        'English and scoring that. --no-roundtrip drops them '
+                        'and trains on labelled pairs only, which cannot '
+                        'reach 7 of the languages at all')
+    g.add_argument('--roundtrip_exclude_languages', nargs='+',
+                   default=['kln'],
+                   help='Target languages to keep out of the round-trip '
+                        'branch. Default kln: its NLLB token is cat_Latn and '
+                        'the classifier has no Kalenjin label, so it is the '
+                        'one language that is both reward-inverted and '
+                        'unguarded')
+    g.add_argument('--backtranslate_batch_size', type=int, default=32,
+                   help='Back-translation runs under no_grad, so this can be '
+                        'well above --rollout_micro_batch')
 
     g = p.add_argument_group('optimisation')
     g.add_argument('--learning_rate', type=float, default=2e-6,
