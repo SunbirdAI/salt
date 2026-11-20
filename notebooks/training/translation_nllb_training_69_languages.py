@@ -1,4 +1,4 @@
-"""Fine-tune NLLB-200 3.3B on the 69 salt-69 languages, and evaluate on salt-69.
+"""Fine-tune NLLB-200 1.3B on the 69 salt-69 languages, and evaluate on salt-69.
 
 Successor to translation_nllb_training_with_ug40_languages.ipynb, using the
 consolidated Sunbird datasets:
@@ -18,6 +18,18 @@ consolidated Sunbird datasets:
   More heavily quality-filtered than parallel_text, and in modern usage: for
   some languages parallel_text has only archaic forms (old bible translations),
   which are useful early in training but shouldn't shape the final output.
+
+Source tagging: the two sources differ in quality and register, so by
+default (--tag_pretrain_source_text) every parallel_text pair gets a tag
+token inserted straight after its source-language token, and the sft pairs
+get nothing. Untagged input - what evaluation, translate() and production
+all send - therefore asks for the clean, modern style of the posttrain data,
+while the noisier, sometimes archaic parallel_text rows still contribute
+without pulling the default output towards themselves. This is the idea
+behind preprocessing.prefix_dataset_tag in the earlier notebooks
+('<mt560>', '<bt>', '<bible>'), with the tag as a token id rather than text;
+see pretrain_tag_token_id for why. Pass --no-tag_pretrain_source_text to
+train untagged throughout.
 
 Training runs in one phase by default. With --sft_epoch it runs two: phase 1
 on all data, then phase 2 on the sft pairs alone at a lower learning rate, so
@@ -73,10 +85,10 @@ Requires torch, transformers, datasets, sacrebleu, sacremoses and torchao.
 
 Usage (from the repo root, in /venv/main):
   python notebooks/training/translation_nllb_training_69_languages.py all \
-      --output_dir /workspace/nllb-3.3b-salt69
+      --output_dir /workspace/nllb-1.3b-salt69
   # one epoch on all data, then one on the sft data alone:
   python notebooks/training/translation_nllb_training_69_languages.py all \
-      --output_dir /workspace/nllb-3.3b-salt69-sft \
+      --output_dir /workspace/nllb-1.3b-salt69-sft \
       --sft_upsample 1 --num_train_epochs 1 --sft_epoch
   # just the sft phase, on top of a model already trained on all data:
   python notebooks/training/translation_nllb_training_69_languages.py all \
@@ -118,7 +130,11 @@ import constants  # noqa: E402
 
 log = logging.getLogger('nllb69')
 
-BASE_MODEL = 'facebook/nllb-200-3.3B'
+# The batch defaults below are tuned for this model on one 32GB card; see
+# the comment on --max_tokens_per_batch before switching to the 3.3B.
+# facebook/nllb-200-distilled-1.3B is the same architecture, so the batch
+# settings carry over unchanged.
+BASE_MODEL = 'facebook/nllb-200-1.3B'
 PARALLEL_DATA = ('Sunbird/sunflower-pretrain-data', 'parallel_text')
 SFT_DATA = ('Sunbird/sunflower-posttrain-data', 'sft_translations')
 EVAL_DATA = ('Sunbird/salt-69', 'sunflower', 'test')
@@ -373,25 +389,83 @@ def filter_pairs(pairs, eval_texts, max_ratio=3.0):
     return keep
 
 
-def tokenize_batch(batch, tokenizer, lang_ids):
+def pretrain_tag_token_id(tokenizer, base_model):
+    """The token id used to tag pretraining-data (parallel_text) sources.
+
+    NLLB's config declares vocab_size 256206, while its tokenizer defines
+    256204 tokens (0..256203: 4 specials, the subword vocabulary, the 202
+    language codes, then <mask>). The base model therefore carries two
+    embedding rows that no string can ever tokenize to, and this uses the
+    first of them (256204) as a dedicated "this is pretraining data" token.
+
+    Those rows are dead weights, not weights with a meaning to destroy. In
+    the 3.3B checkpoint, 256203-256205 have rms ~0.09 against ~0.18 for the
+    language codes, and cosine similarity +0.53..+0.71 with each other
+    against +0.11..+0.24 between genuine language codes: never an input and
+    never a target, they were pushed into one shared "don't predict me"
+    direction. They also decode to '' if one is ever generated.
+
+    Using a spare row rather than text means:
+    - one token instead of the three that '<pt>' tokenizes to
+      ('_<', 'pt', '>'), which matters because batches are token-budgeted;
+    - no collision with real text (NLLB produces '_<' for any stray '<');
+    - the embedding is tied to the output projection, so tagging with real
+      subwords would tug on tokens that matter for genuine output, while
+      this row is shared with nothing;
+    - no resize_token_embeddings, no change to vocab_size, and no change to
+      the tokenizer at all. The tag exists only inside this pipeline, so the
+      saved model still works with a stock NLLB tokenizer, and nothing in
+      evaluation, translate() or production has to know about it.
+
+    The assertions below fail loudly if a future base model closes the gap
+    between the tokenizer and the embedding matrix.
+    """
+    config = transformers.AutoConfig.from_pretrained(base_model)
+    token_id = len(tokenizer)
+    if token_id >= config.vocab_size:
+        raise SystemExit(
+            f'{base_model} has no spare embedding row for the pretraining '
+            f'tag: tokenizer has {token_id} tokens and vocab_size is '
+            f'{config.vocab_size}. Pass --no-tag_pretrain_source_text.')
+    token = tokenizer.convert_ids_to_tokens(token_id)
+    if token is not None:
+        raise SystemExit(
+            f'Token id {token_id} of {base_model} is not spare after all: it '
+            f'maps to {token!r}. Pass --no-tag_pretrain_source_text.')
+    log.info('Tagging parallel_text sources with spare token id %d of %s '
+             '(tokenizer defines %d tokens, vocab_size is %d)', token_id,
+             base_model, len(tokenizer), config.vocab_size)
+    return token_id
+
+
+def tokenize_batch(batch, tokenizer, lang_ids, pretrain_tag_id=None):
     enc = tokenizer(batch['source'], text_target=batch['target'])
     for i in range(len(enc['input_ids'])):
         # NLLB puts the language token first; set the real languages.
         enc['input_ids'][i][0] = lang_ids[batch['source.language'][i]]
         enc['labels'][i][0] = lang_ids[batch['target.language'][i]]
+        if (pretrain_tag_id is not None
+                and batch['origin'][i].startswith('parallel')):
+            # Straight after the source-language token, so that position 0
+            # stays the language token the collator's src_lang_dropout
+            # rewrites.
+            enc['input_ids'][i].insert(1, pretrain_tag_id)
+            enc['attention_mask'][i].insert(1, 1)
     enc['n_source_tokens'] = [len(x) for x in enc['input_ids']]
     enc['n_target_tokens'] = [len(x) for x in enc['labels']]
     return enc
 
 
-def tokenize_and_length_filter(pairs, tokenizer, lang_ids, args, name):
+def tokenize_and_length_filter(pairs, tokenizer, lang_ids, args, name,
+                               pretrain_tag_id=None):
     ds = datasets.Dataset.from_dict(pairs.data)
     # Single process: the fast tokenizer is already multi-threaded, and
     # num_proc>1 was ~10x slower here (per-worker tokenizer overhead).
     ds = ds.map(tokenize_batch, batched=True,
-                fn_kwargs={'tokenizer': tokenizer, 'lang_ids': lang_ids},
+                fn_kwargs={'tokenizer': tokenizer, 'lang_ids': lang_ids,
+                           'pretrain_tag_id': pretrain_tag_id},
                 desc=f'Tokenizing {name}')
-    df = ds.select_columns(['source.language', 'target.language',
+    df = ds.select_columns(['source.language', 'target.language', 'origin',
                             'n_source_tokens', 'n_target_tokens']).to_pandas()
     n_src, n_tgt = df['n_source_tokens'].values, df['n_target_tokens'].values
     too_long = (n_src > args.max_length) | (n_tgt > args.max_length)
@@ -404,6 +478,18 @@ def tokenize_and_length_filter(pairs, tokenizer, lang_ids, args, name):
                  'affected (count, fraction):\n%s', name, too_long.sum(),
                  args.max_length, by_dir.head(15).to_string())
     ds = ds.select(np.flatnonzero(~too_long))
+    if pretrain_tag_id is not None:
+        # Counted from the origin column rather than by reading back every
+        # input_ids list, which would materialize the whole dataset; the one
+        # row that is read back checks the token really is where it should be.
+        is_pretrain = df['origin'][~too_long].str.startswith('parallel')
+        log.info('%s: tagged %d of %d rows with token id %d',
+                 name, int(is_pretrain.sum()), len(ds), pretrain_tag_id)
+        tagged_rows = np.flatnonzero(is_pretrain.values)
+        if len(tagged_rows):
+            first = ds[int(tagged_rows[0])]['input_ids']
+            assert first[1] == pretrain_tag_id, (
+                f'{name}: tag token missing from a parallel row: {first[:4]}')
     for label, n in (('source', n_src[~too_long]), ('target', n_tgt[~too_long])):
         log.info('%s %s tokens: p50=%d p90=%d p99=%d max=%d', name, label,
                  *np.percentile(n, [50, 90, 99]), n.max())
@@ -432,24 +518,36 @@ def prepare(args):
     rng = random.Random(args.seed)
     tokenizer = transformers.AutoTokenizer.from_pretrained(args.base_model)
     lang_ids = constants.nllb_69_language_token_ids(tokenizer)
+    # Before the data load, so an unusable base model fails in seconds.
+    tag_id = (pretrain_tag_token_id(tokenizer, args.base_model)
+              if args.tag_pretrain_source_text else None)
     eval_texts = salt69_texts()
 
     pairs = Pairs()
     add_parallel_pairs(pairs, args, rng)
     add_sft_pairs(pairs, 'train', upsample=args.sft_upsample)
     train = tokenize_and_length_filter(filter_pairs(pairs, eval_texts),
-                                       tokenizer, lang_ids, args, 'train')
+                                       tokenizer, lang_ids, args, 'train',
+                                       pretrain_tag_id=tag_id)
 
+    # Validation is sft only, so passing the tag id leaves it untouched: dev
+    # chrF is measured on the untagged input that inference will use.
     val_pairs = Pairs()
     add_sft_pairs(val_pairs, 'dev', upsample=1)
     validation = tokenize_and_length_filter(
         filter_pairs(val_pairs, eval_texts), tokenizer, lang_ids, args,
-        'validation')
+        'validation', pretrain_tag_id=tag_id)
 
     out = Path(args.output_dir)
     out.mkdir(parents=True, exist_ok=True)
     datasets.DatasetDict({'train': train, 'validation': validation}
                          ).save_to_disk(str(out / 'pairs'))
+    # Provenance: the tag is baked into input_ids here, so this is the only
+    # record of it. train() copies it into the final model directory.
+    with open(out / 'pretrain_tag.json', 'w') as f:
+        json.dump({'pretrain_tag_token_id': tag_id,
+                   'tagged_origins': 'parallel*',
+                   'base_model': args.base_model}, f, indent=2)
     write_pair_counts(train, out / 'pair_counts.csv')
     log.info('Saved %d train / %d validation pairs to %s',
              len(train), len(validation), out / 'pairs')
@@ -990,6 +1088,9 @@ def train(args):
         if args.src_lang_dropout:
             codes[UNKNOWN_SOURCE] = constants.NLLB_69_UNKNOWN_SOURCE_CODE
         json.dump(codes, f, indent=2)
+    tag_record = out / 'pretrain_tag.json'
+    if tag_record.exists():
+        (final_dir / 'pretrain_tag.json').write_text(tag_record.read_text())
     log.info('Saved final model to %s', final_dir)
     if args.hub_model_id:
         trainer.push_to_hub()
@@ -1235,7 +1336,7 @@ def parse_args():
                         'dropped, eval inputs truncated')
 
     g = p.add_argument_group('prepare')
-    g.add_argument('--max_per_direction_native', type=int, default=6000,
+    g.add_argument('--max_per_direction_native', type=int, default=15000,
                    help='Cap on parallel_text pairs per eng->xx / xx->eng '
                         'direction, for languages NLLB-200 was pretrained on '
                         '(constants.SALT_LANGUAGE_CODES_NLLB_69_NATIVE)')
@@ -1249,29 +1350,92 @@ def parse_args():
     g.add_argument('--max_per_non_eng_pair', type=int, default=2000,
                    help='Cap on non-English pairs per direction (xx->yy)')
     g.add_argument('--sft_upsample', type=int, default=2)
+    g.add_argument('--tag_pretrain_source_text',
+                   action=argparse.BooleanOptionalAction, default=True,
+                   help='Mark pairs from sunflower-pretrain-data '
+                        '(parallel_text) with a tag token after their '
+                        'source-language token, leaving the '
+                        'sunflower-posttrain-data (sft) pairs untagged, so '
+                        'that untagged input at inference time asks for the '
+                        'posttrain style. The tag is a spare embedding row '
+                        'of the base model (see pretrain_tag_token_id); the '
+                        'tokenizer is not changed.')
     g.add_argument('--limit_rows', type=int,
                    help='Use only the first N parallel_text rows (testing)')
 
     g = p.add_argument_group('train')
-    # Defaults benchmarked on one RTX 5090 (32GB): 3072-token batches without
-    # gradient checkpointing ran at ~4,600 source tokens/s with a 27.6GB peak
-    # (the worst-case batches run first). 8192 tokens with checkpointing:
-    # ~4,150/s, 27.9GB. Fixed batches of 8 pairs: ~1,700/s.
-    g.add_argument('--max_tokens_per_batch', type=int, default=3072,
+    # Batch defaults benchmarked on one RTX 5090 (32GB usable), bf16 weights
+    # and AdamW8bit, at a FIXED effective batch of 6144 x 6 = 36,864 padded
+    # tokens per optimizer step. Holding the effective batch fixed is the
+    # point of the comparison: --learning_rate is tuned for it, so a bigger
+    # token budget has to be paid for with proportionally less accumulation,
+    # and what is actually being bought is fewer, larger kernels per
+    # optimizer step rather than a bigger batch.
+    #
+    # Peak memory is linear in the token budget and independent of sequence
+    # length, because the (tokens x 256k vocab) logits dominate everything
+    # else. Three terms make up the peak: ~2 bytes/param of weights, the
+    # same again of bf16 gradients (held across the whole accumulation, so
+    # they are NOT free), 2 bytes/param of 8-bit optimizer state, and then
+    # the logits. That gradient buffer is why a 3.3B run peaks ~6.6GB above
+    # what a single micro-batch would suggest.
+    #
+    # 1.3B, target tokens/s and peak GiB (OOM above the last row):
+    #   budget  accum   no checkpointing      with checkpointing
+    #     3072     12   9,564 /  13.5GB       5,860 /  10.8GB
+    #     4608      8  12,604 /  16.4GB
+    #     6144      6  13,344 /  19.3GB  <--  10,422 /  13.9GB
+    #     9216      4  14,148 /  25.1GB      11,897 /  17.0GB
+    #    12288      3     OOM                12,404 /  20.1GB
+    #    18432      2                        12,455 /  26.2GB
+    # 6144 is the knee: 1.40x the throughput of 3072 at 61% of the card.
+    # 9216 buys only 6% more for another 5.8GB. Gradient checkpointing is
+    # not worth it above ~16GB -- at matched memory it always loses (12288
+    # checkpointed is slower than 6144 plain, at more memory), because the
+    # recompute is pure overhead while the vocab projection, which dominates
+    # the compute, is not checkpointed.
+    #
+    # 3.3B, for a switch back (same harness, same effective batch):
+    #   budget  accum   no checkpointing      with checkpointing
+    #     2048     18   6,170 /  23.9GB
+    #     3072     12   6,930 /  26.3GB  <--  (4096: 5,650 / 23.1GB)
+    #     4096      9   7,097 /  28.9GB       6,129 /  25.3GB
+    #     5120      7     OOM                 6,039 /  27.5GB  (8192, accum 4)
+    # So 3072 x 12 is right for the 3.3B and is what this script used to
+    # default to: 4096 gains 2% for 2.5GB more, and 5120 does not fit.
+    # Switching back needs --max_tokens_per_batch 3072
+    # --gradient_accumulation_steps 12 --dev_chrf_batch_size 64
+    # --eval_batch_size 32, which restores the old behaviour exactly.
+    g.add_argument('--max_tokens_per_batch', type=int, default=6144,
                    help='Token-budget batching: max (pairs x (longest source '
                         '+ longest target)) per micro-batch. 0 = fixed-size '
-                        'batches of --per_device_train_batch_size')
-    g.add_argument('--max_sequences_per_batch', type=int, default=256)
+                        'batches of --per_device_train_batch_size. Tuned for '
+                        'the 1.3B on 32GB; use 3072 for the 3.3B')
+    g.add_argument('--max_sequences_per_batch', type=int, default=512,
+                   help='Cap on pairs per micro-batch, whatever the token '
+                        'budget allows. Peak memory tracks the token budget '
+                        'and not this (a batch of 640 short pairs and one of '
+                        '160 longer ones cost the same), so the cap only '
+                        'bounds per-sequence overhead. Doubling the budget '
+                        'made 256 bind on 8%% of batches; 512 brings mean '
+                        'budget use back to 99%%')
     g.add_argument('--gradient_checkpointing',
                    action=argparse.BooleanOptionalAction, default=False,
-                   help='Needed for token budgets above ~4k on 32GB')
-    g.add_argument('--per_device_train_batch_size', type=int, default=8,
+                   help='Trades ~30%% of throughput for ~30%% of the peak. '
+                        'Only worth it below ~16GB of headroom: at matched '
+                        'memory a plain run with a smaller budget is faster')
+    g.add_argument('--per_device_train_batch_size', type=int, default=8, 
                    help='Only used with --max_tokens_per_batch 0')
-    g.add_argument('--per_device_eval_batch_size', type=int, default=16)
-    g.add_argument('--gradient_accumulation_steps', type=int, default=12,
-                   help='Micro-batches per optimizer step. 12 x 3072-token '
-                        'batches is ~28k real tokens, like 256 pairs; use '
-                        '~32 with fixed batches of 8')
+    g.add_argument('--per_device_eval_batch_size', type=int, default=16,
+                   help='Eval-loss batch. 16 peaks at 14.5GB on the 1.3B '
+                        '(worst case: a batch of --max_length pairs), under '
+                        'the training peak. 32 peaks at 23.8GB and would '
+                        'make evaluation, not training, set the ceiling')
+    g.add_argument('--gradient_accumulation_steps', type=int, default=6, 
+                   help='Micro-batches per optimizer step. 6 x 6144 tokens '
+                        'is the same ~37k padded tokens per step as the '
+                        '3.3B default of 12 x 3072, so --learning_rate '
+                        'carries over; use ~32 with fixed batches of 8')
     g.add_argument('--learning_rate', type=float, default=1e-4)
     g.add_argument('--weight_decay', type=float, default=0.0)
     g.add_argument('--warmup_steps', type=int, default=100)
@@ -1288,7 +1452,7 @@ def parse_args():
         'shape the final output. Phase 2 reuses the sft rows of the same '
         'prepared dataset.')
     g.add_argument('--sft_epoch', action=argparse.BooleanOptionalAction,
-                   default=False,
+                   default=True,
                    help='Run the second, sft-only phase')
     g.add_argument('--skip_phase1', action=argparse.BooleanOptionalAction,
                    default=False,
@@ -1296,7 +1460,7 @@ def parse_args():
                         'from --base_model. Use to add an sft phase to a '
                         'model already trained on all data. Implies '
                         '--sft_epoch')
-    g.add_argument('--sft_epochs', type=float, default=1.0,
+    g.add_argument('--sft_epochs', type=float, default=3.0,
                    help='Epochs for phase 2')
     g.add_argument('--sft_epoch_learning_rate', type=float, default=5e-5,
                    help='Phase-2 learning rate. Lower than phase 1, so the '
@@ -1315,9 +1479,22 @@ def parse_args():
     g.add_argument('--logging_steps', type=int, default=10)
     g.add_argument('--save_total_limit', type=int, default=3)
     g.add_argument('--early_stopping_patience', type=int, default=6)
-    g.add_argument('--dev_chrf_batch_size', type=int, default=64,
+    # Sized against the REAL dev set, not a synthetic one: its source
+    # lengths are p50=32 but p90=119, p99=407, max=614 tokens, and
+    # translate() sorts by length, so the long rows land in one batch
+    # together and the KV cache (24 layers x batch x ~1k tokens) sets the
+    # peak. Measured with optimizer state resident and the training step's
+    # blocks cached, which is how it actually runs: 1077 dev pairs took
+    # 97.5s/8.2GB at 32, 65.4s/11.3GB at 64, 41.6s/17.5GB at 128,
+    # 33.0s/23.7GB at 192, and OOMed at 256. 128 is the largest value that
+    # stays under the training peak, so --max_tokens_per_batch remains the
+    # one setting that decides whether a run fits.
+    g.add_argument('--dev_chrf_batch_size', type=int, default=128,
                    help='Generation batch size for dev-set chrF at each '
-                        'evaluation (64: ~1 min, ~23GB peak during training)')
+                        'evaluation, which runs twice per evaluation with '
+                        '--src_lang_dropout. 128 takes 42s per pass on the '
+                        '1.3B for a 17.5GB peak; drop to 64 (65s, 11.3GB) '
+                        'for the 3.3B or if the dev set grows a longer tail')
     g.add_argument('--best_metric', choices=['chrf', 'chrf_nosrc', 'loss'],
                    default='chrf',
                    help='Dev-set metric for best checkpoint and early '
@@ -1337,7 +1514,12 @@ def parse_args():
                    help='Languages to evaluate (default: all in salt-69)')
     g.add_argument('--eval_limit', type=int,
                    help='Max sentences per language (testing)')
-    g.add_argument('--eval_batch_size', type=int, default=32)
+    g.add_argument('--eval_batch_size', type=int, default=64,
+                   help='Generation batch for the final salt-69 eval. Safe '
+                        'to raise: salt-69 is 121 short rows (max 34 tokens) '
+                        'with no long tail, and this runs on its own with no '
+                        'optimizer state, so 64 at --num_beams 4 peaks at '
+                        'only 5.7GB on the 1.3B. Use 32 for the 3.3B')
     g.add_argument('--num_beams', type=int, default=4)
     g.add_argument('--max_new_tokens', type=int, default=256)
     g.add_argument('--run_name', help='Name for result files')
